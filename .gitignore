@@ -1,0 +1,50 @@
+# --- Binaries & Build Artifacts ---
+bin/
+nvim-ai-engine
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# --- Go Specific ---
+go.work
+# Jeśli używasz vendoringu, usuń poniższą linię:
+vendor/
+*.out
+*.prof
+*.test
+
+# --- Secrets & Environment ---
+# TO JEST NAJWAŻNIEJSZE - tu lądują Twoje klucze API
+.env
+.env.*
+!.env.example
+secrets.yaml
+
+# --- Neovim & Lua Specific ---
+# Pliki tymczasowe edytora
+*.swp
+*.swo
+*.swn
+*.swo
+.netrwhist
+undo/
+tags
+
+# --- Logs ---
+*.log
+/tmp/nvim-engine.log
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
+.directory
+
+# --- IDEs ---
+.idea/
+.vscode/
+*.iml
+.project
+.settings/
+.classpath
