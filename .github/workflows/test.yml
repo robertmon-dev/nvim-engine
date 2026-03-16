@@ -21,7 +21,7 @@ jobs:
           cache: true
 
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@1.64.5
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
       - name: Run Linter
         run: make lint
