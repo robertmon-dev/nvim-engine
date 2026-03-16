@@ -28,6 +28,19 @@ install: clean build
 	@cp $(BUILD_DIR)/$(APP_NAME) $(INSTALL_DIR)/
 	@echo "=> Done! Binary size: $$(du -h $(INSTALL_DIR)/$(APP_NAME) | cut -f1)"
 
+# ==============================================================================
+# Release
+# ==============================================================================
+
+.PHONY: release
+release:
+	@chmod +x scripts/release.sh
+	@./scripts/release.sh
+
+# ==============================================================================
+# Run
+# ==============================================================================
+
 .PHONY: run
 run: build
 	@echo "=> Running $(APP_NAME) in manual mode..."
