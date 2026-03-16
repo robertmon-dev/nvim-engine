@@ -1,8 +1,8 @@
-# 🚀 nvim-ai-engine
+# nvim-engine
 
 **nvim-ai-engine** is a high-performance, asynchronous AI engine for the Neovim editor, written in Go. It was designed for speed, reliability, and the complete elimination of UI freezes during communication with LLM models.
 
-## ✨ Key Features
+## Key Features
 
 * **Multi-Provider Failover:** Support for multiple providers (Gemini, Anthropic, OpenAI). If one of them returns an error (e.g., *Rate Limit 429*), the engine automatically switches to the next one in the list.
 * **Asynchronous Processing:** Uses an advanced Worker Pool (`pond`), ensuring tasks are queued and processed in the background without affecting Neovim's responsiveness.
@@ -10,7 +10,7 @@
 * **Optimized Binary:** Compilation with `-s -w` and `-trimpath` flags ensures a lightweight executable (6.6MB) stripped of unnecessary symbols, debug information, and local development paths.
 * **Commit Generation:** Built-in logic for generating professional commit messages compliant with the *Conventional Commits* standard.
 
-## 🛠️ Installation
+## Installation
 
 ### Requirements
 * [Go](https://go.dev/) (version 1.25 or newer)
@@ -30,7 +30,7 @@ make install
 
 The binary will be installed to: `~/.config/nvim/bin/nvim-ai-engine`.
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 The engine automatically reads API keys from your environment. You can set these in your `.zshrc`, `.bashrc`, or a `.env` file:
@@ -45,7 +45,7 @@ export OPENAI_MODEL="gpt-4o"
 export ANTHROPIC_MODEL="claude-3-5-sonnet-20241022"
 ```
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 ├── cmd
@@ -75,7 +75,7 @@ export ANTHROPIC_MODEL="claude-3-5-sonnet-20241022"
      └── provider.go
 ```
 
-## 🧪 Development and Testing
+## Development and Testing
 
 The project emphasizes code quality and thread safety, utilizing Go's race detector during testing.
 
@@ -85,7 +85,7 @@ The project emphasizes code quality and thread safety, utilizing Go's race detec
 
 All tests utilize a `MockProvider`, allowing the suite to run without an active internet connection or consuming API quotas.
 
-## 🤝 Support
+## Support
 
 The engine sends real-time logs back to Neovim via RPC. If you encounter issues, you can check the logs by inspecting the temporary log file:
 `/tmp/nvim-engine.log`
