@@ -1,6 +1,6 @@
 # nvim-engine
 
-**nvim-ai-engine** is a high-performance, asynchronous AI engine for the Neovim editor, written in Go. It was designed for speed, reliability, and the complete elimination of UI freezes during communication with LLM models.
+**nvim-engine** is a high-performance, asynchronous AI engine for the Neovim editor, written in Go. It was designed for speed, reliability, and the complete elimination of UI freezes during communication with LLM models.
 
 ## Key Features
 
@@ -22,13 +22,13 @@ The project includes a robust `Makefile` to automate the build and installation 
 
 ```bash
 
-git clone https://github.com/robertmon-dev/nvim-ai-engine.git
-cd nvim-ai-engine
+git clone https://github.com/robertmon-dev/nvim-engine.git
+cd nvim-engine
 
 make install
 ```
 
-The binary will be installed to: `~/.config/nvim/bin/nvim-ai-engine`.
+The binary will be installed to: `~/.config/nvim/bin/nvim-engine`.
 
 ## Configuration
 
