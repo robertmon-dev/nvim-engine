@@ -11,8 +11,37 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
+type SafeBuffer struct {
+	b bytes.Buffer
+	m sync.Mutex
+}
+
+func (s *SafeBuffer) Read(p []byte) (n int, err error) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	return s.b.Read(p)
+}
+
+func (s *SafeBuffer) Write(p []byte) (n int, err error) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *SafeBuffer) ReadByte() (byte, error) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	return s.b.ReadByte()
+}
+
+func (s *SafeBuffer) WriteByte(c byte) error {
+	s.m.Lock()
+	defer s.m.Unlock()
+	return s.b.WriteByte(c)
+}
+
 func TestNvimBridge_Notify_Format(t *testing.T) {
-	var buf bytes.Buffer
+	var buf SafeBuffer
 	enc := msgpack.NewEncoder(&buf)
 	bridge := NewNvimBridge(enc)
 
@@ -48,7 +77,7 @@ func TestNvimBridge_Notify_Format(t *testing.T) {
 }
 
 func TestNvimLogHook_Run(t *testing.T) {
-	var buf bytes.Buffer
+	var buf SafeBuffer
 	enc := msgpack.NewEncoder(&buf)
 	bridge := NewNvimBridge(enc)
 	hook := &NvimLogHook{bridge: bridge}
@@ -56,7 +85,7 @@ func TestNvimLogHook_Run(t *testing.T) {
 	hook.Run(nil, zerolog.DebugLevel, "this is hidden")
 	hook.Run(nil, zerolog.InfoLevel, "this is info")
 
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	dec := msgpack.NewDecoder(&buf)
 	var result []any
@@ -77,7 +106,7 @@ func TestNvimLogHook_Run(t *testing.T) {
 }
 
 func TestNvimBridge_Notify_Concurrency(t *testing.T) {
-	var buf bytes.Buffer
+	var buf SafeBuffer
 	enc := msgpack.NewEncoder(&buf)
 	bridge := NewNvimBridge(enc)
 
