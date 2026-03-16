@@ -19,6 +19,12 @@ vendor/
 !.env.example
 secrets.yaml
 
+# --- Archive files (Releases) ---
+
+*.tar.gz
+*.zip
+*.7z
+
 # --- Neovim & Lua Specific ---
 *.swp
 *.swo
