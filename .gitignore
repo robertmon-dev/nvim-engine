@@ -9,21 +9,17 @@ nvim-ai-engine
 
 # --- Go Specific ---
 go.work
-# Jeśli używasz vendoringu, usuń poniższą linię:
 vendor/
 *.out
 *.prof
 *.test
 
 # --- Secrets & Environment ---
-# TO JEST NAJWAŻNIEJSZE - tu lądują Twoje klucze API
 .env
-.env.*
 !.env.example
 secrets.yaml
 
 # --- Neovim & Lua Specific ---
-# Pliki tymczasowe edytora
 *.swp
 *.swo
 *.swn
