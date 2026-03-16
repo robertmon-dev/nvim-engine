@@ -16,17 +16,17 @@ all: build
 
 .PHONY: build
 build:
-	@echo "=> Building $(APP_NAME)..."
+	@echo "=> Building optimized $(APP_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	@go build -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PKG)
+	@go build -ldflags="-s -w" -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PKG)
 	@echo "=> Build complete: $(BUILD_DIR)/$(APP_NAME)"
 
 .PHONY: install
-install: build
-	@echo "=> Installing $(APP_NAME) to $(INSTALL_DIR)..."
+install: clean build
+	@echo "=> Installing production binary to $(INSTALL_DIR)..."
 	@mkdir -p $(INSTALL_DIR)
 	@cp $(BUILD_DIR)/$(APP_NAME) $(INSTALL_DIR)/
-	@echo "=> Install complete. Neovim is ready to use the engine!"
+	@echo "=> Done! Binary size: $$(du -h $(INSTALL_DIR)/$(APP_NAME) | cut -f1)"
 
 .PHONY: run
 run: build
