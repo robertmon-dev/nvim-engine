@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -70,6 +71,14 @@ func Get() *Config {
 	})
 
 	return instance
+}
+
+func (c *Config) Validate() error {
+	if c.Providers.GeminiAPIKey == "" && c.Providers.AnthropicAPIKey == "" && c.Providers.OpenAIAPIKey == "" {
+		return errors.New("no API keys found in config! AI generation will fail")
+	}
+
+	return nil
 }
 
 func getEnvOrDefault(key, fallback string) string {

@@ -1,10 +1,10 @@
 package main
 
 import (
-	"io"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"nvim-engine/internal/config"
 	"nvim-engine/internal/engine"
@@ -21,25 +21,11 @@ func main() {
 	log.Info().Msg("Booting up the Go-Engine...")
 
 	cfg := config.Get()
-
-	providers := map[provider.ID]provider.Provider{
-		provider.Gemini: &provider.GeminiProvider{
-			APIKey: cfg.Providers.GeminiAPIKey,
-			Model:  cfg.Providers.GeminiModel,
-			URL:    cfg.Providers.GeminiURL,
-		},
-		provider.Anthropic: &provider.AnthropicProvider{
-			APIKey: cfg.Providers.AnthropicAPIKey,
-			Model:  cfg.Providers.AnthropicModel,
-			URL:    cfg.Providers.AnthropicURL,
-		},
-		provider.OpenAI: &provider.OpenAIProvider{
-			APIKey: cfg.Providers.OpenAIAPIKey,
-			Model:  cfg.Providers.OpenAIModel,
-			URL:    cfg.Providers.OpenAIURL,
-		},
+	if err := cfg.Validate(); err != nil {
+		log.Warn().Msg(err.Error())
 	}
 
+	providers := provider.InitFromConfig(cfg)
 	proc := engine.NewProcessor(cfg.Engine.Workers, cfg.Engine.Capacity, providers)
 
 	dec := msgpack.NewDecoder(os.Stdin)
@@ -58,31 +44,10 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	go func() {
-		for {
-			var msg engine.RPCNotification
-			err := dec.Decode(&msg)
-
-			if err == io.EOF {
-				log.Info().Msg("Neovim closed STDIN (EOF). Initiating shutdown...")
-				sigChan <- syscall.SIGTERM
-				break
-			}
-
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to decode MessagePack payload")
-				continue
-			}
-
-			log.Debug().Str("method", msg.Method).Msg("Received RPC task")
-			ctrl.Dispatch(msg)
-		}
-	}()
+	go ctrl.Listen(dec, sigChan)
 
 	sig := <-sigChan
 	log.Info().Str("signal", sig.String()).Msg("Shutdown signal received. Wrapping up...")
 
-	proc.Pool.StopAndWait()
-
-	log.Info().Msg("All workers finished. Go-Engine gracefully shut down. See ya!")
+	proc.Shutdown(5 * time.Second)
 }

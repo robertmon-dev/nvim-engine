@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"nvim-engine/internal/logger"
 	"nvim-engine/internal/provider"
 
 	"github.com/alitto/pond"
@@ -84,4 +85,21 @@ func parseOptions(raw string) []string {
 	}
 
 	return options
+}
+
+func (p *Processor) Shutdown(timeout time.Duration) {
+	log := logger.Get()
+	done := make(chan struct{})
+
+	go func() {
+		p.Pool.StopAndWait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Info().Msg("All workers finished. Go-Engine gracefully shut down. See ya!")
+	case <-time.After(timeout):
+		log.Warn().Msgf("Timeout waiting for workers (%s). Forcing shutdown to prevent zombie process!", timeout)
+	}
 }
