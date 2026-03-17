@@ -17,6 +17,7 @@ const (
 	Gemini    ID = "gemini"
 	Anthropic ID = "anthropic"
 	OpenAI    ID = "openai"
+	Ollama    ID = "ollama"
 )
 
 type Provider interface {
@@ -71,6 +72,10 @@ func InitFromConfig(cfg *config.Config) map[ID]Provider {
 			APIKey: cfg.Providers.OpenAIAPIKey,
 			Model:  cfg.Providers.OpenAIModel,
 			URL:    cfg.Providers.OpenAIURL,
+		},
+		Ollama: &OllamaProvider{
+			Model: cfg.Providers.OllamaModel,
+			URL:   cfg.Providers.OllamaURL,
 		},
 	}
 }

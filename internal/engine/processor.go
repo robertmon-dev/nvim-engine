@@ -25,10 +25,11 @@ func NewProcessor(workers, capacity int, providers map[provider.ID]provider.Prov
 }
 
 func (p *Processor) Process(task Task) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	order := []provider.ID{
+		provider.Ollama,
 		provider.Gemini,
 		provider.Anthropic,
 		provider.OpenAI,
@@ -56,11 +57,12 @@ func (p *Processor) Process(task Task) ([]string, error) {
 				return options, nil
 			}
 		}
+
 		lastErr = err
 	}
 
 	if attemptedCount == 0 {
-		return nil, fmt.Errorf("no API keys provided")
+		return nil, fmt.Errorf("no API keys or local providers configured")
 	}
 
 	return nil, fmt.Errorf("all providers failed. last error: %v", lastErr)

@@ -25,6 +25,9 @@ type ProvidersConfig struct {
 	OpenAIAPIKey string
 	OpenAIModel  string
 	OpenAIURL    string
+
+	OllamaModel string
+	OllamaURL   string
 }
 
 type LoggerConfig struct {
@@ -62,6 +65,9 @@ func Get() *Config {
 				OpenAIAPIKey: os.Getenv("OPENAI_API_KEY"),
 				OpenAIModel:  getEnvOrDefault("OPENAI_MODEL", "gpt-4o"),
 				OpenAIURL:    getEnvOrDefault("OPENAI_URL", "https://api.openai.com/v1/chat/completions"),
+
+				OllamaModel: getEnvOrDefault("OLLAMA_MODEL", "llama3"),
+				OllamaURL:   getEnvOrDefault("OLLAMA_URL", "http://localhost:11434/api/chat"),
 			},
 			Logger: LoggerConfig{
 				Level: getEnvOrDefault("LOG_LEVEL", "debug"),
@@ -74,8 +80,11 @@ func Get() *Config {
 }
 
 func (c *Config) Validate() error {
-	if c.Providers.GeminiAPIKey == "" && c.Providers.AnthropicAPIKey == "" && c.Providers.OpenAIAPIKey == "" {
-		return errors.New("no API keys found in config! AI generation will fail")
+	hasCloudKey := c.Providers.GeminiAPIKey != "" || c.Providers.AnthropicAPIKey != "" || c.Providers.OpenAIAPIKey != ""
+	hasOllama := c.Providers.OllamaModel != "" && c.Providers.OllamaURL != ""
+
+	if !hasCloudKey && !hasOllama {
+		return errors.New("no API keys found and Ollama is not configured! AI generation will fail")
 	}
 
 	return nil
