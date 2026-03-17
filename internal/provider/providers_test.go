@@ -113,6 +113,63 @@ func TestAnthropicProvider_Generate(t *testing.T) {
 	}
 }
 
+func TestOllamaProvider_Generate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := ollamaResponse{
+			Model: "llama3",
+			Message: ollamaMessage{
+				Role:    "assistant",
+				Content: "hello from mock ollama",
+			},
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	prov := &OllamaProvider{
+		Model: "llama3",
+		URL:   server.URL,
+	}
+
+	result, err := prov.Generate(context.Background(), "system", "user")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v", err)
+	}
+
+	if result != "hello from mock ollama" {
+		t.Errorf("Expected 'hello from mock ollama', got: %v", result)
+	}
+}
+
+func TestOllamaProvider_ApiError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := ollamaResponse{
+			Error: "model 'llama3' not found, try pulling it first",
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	prov := &OllamaProvider{
+		Model: "llama3",
+		URL:   server.URL,
+	}
+
+	_, err := prov.Generate(context.Background(), "system", "user")
+	if err == nil {
+		t.Fatal("Expected an error from Ollama response, but got nil")
+	}
+
+	expectedErr := "ollama api error: model 'llama3' not found, try pulling it first"
+	if err.Error() != expectedErr {
+		t.Errorf("Expected error %q, got: %q", expectedErr, err.Error())
+	}
+}
+
 func TestProvider_HttpError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
