@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,19 +24,19 @@ type Provider interface {
 	IsReady() bool
 }
 
-func sendRequest[T any](req *http.Request) (T, error) {
+func sendRequest[T any](req *http.Request) (T, []byte, int, error) {
 	var target T
 	log := logger.Get()
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return target, err
+		return target, nil, 0, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return target, fmt.Errorf("failed to read response body: %w", err)
+		return target, nil, resp.StatusCode, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	log.Trace().
@@ -45,15 +44,7 @@ func sendRequest[T any](req *http.Request) (T, error) {
 		Str("body", string(bodyBytes)).
 		Msg("Received API response")
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return target, fmt.Errorf("api error: status code %d, body: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	if err := json.Unmarshal(bodyBytes, &target); err != nil {
-		return target, err
-	}
-
-	return target, nil
+	return target, bodyBytes, resp.StatusCode, nil
 }
 
 func InitFromConfig(cfg *config.Config) map[ID]Provider {

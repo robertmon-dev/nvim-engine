@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"nvim-engine/internal/provider/p_errors"
 )
 
 type GeminiProvider struct {
@@ -36,6 +38,39 @@ type geminiResponse struct {
 	} `json:"candidates"`
 }
 
+type geminiErrorResponse struct {
+	Error struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Status  string `json:"status"`
+	} `json:"error"`
+}
+
+func (g *GeminiProvider) mapError(status int, body []byte) error {
+	var gemErr geminiErrorResponse
+	_ = json.Unmarshal(body, &gemErr)
+
+	code := p_errors.ErrUnknown
+	switch status {
+	case 401, 403:
+		code = p_errors.ErrUnauthorized
+	case 429:
+		code = p_errors.ErrRateLimit
+	case 400:
+		code = p_errors.ErrInvalidRequest
+	case 500, 503, 504:
+		code = p_errors.ErrInternal
+	}
+
+	return &p_errors.ProviderError{
+		Code:     code,
+		Provider: string(Gemini),
+		Status:   status,
+		Message:  gemErr.Error.Message,
+		Raw:      string(body),
+	}
+}
+
 func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (string, error) {
 	endpoint := fmt.Sprintf("%s/%s:generateContent?key=%s", g.URL, g.Model, g.APIKey)
 
@@ -60,13 +95,28 @@ func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (str
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	result, err := sendRequest[geminiResponse](req)
+	_, body, status, err := sendRequest[geminiResponse](req)
 	if err != nil {
 		return "", err
 	}
 
+	if status < 200 || status >= 300 {
+		return "", g.mapError(status, body)
+	}
+
+	var result geminiResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("failed to decode gemini response: %w", err)
+	}
+
 	if len(result.Candidates) == 0 {
-		return "", fmt.Errorf("gemini returned no candidates")
+		return "", &p_errors.ProviderError{
+			Code:     p_errors.ErrInvalidRequest,
+			Provider: string(Gemini),
+			Status:   status,
+			Message:  "Gemini returned no candidates. This usually happens when the content is blocked by safety filters.",
+			Raw:      string(body),
+		}
 	}
 
 	return result.Candidates[0].Content.Parts[0].Text, nil
