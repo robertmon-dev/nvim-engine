@@ -20,9 +20,9 @@ type Controller struct {
 	Handlers map[RPCMethod]types.TaskHandler
 }
 
-func BindHandler[T any](
+func BindHandler[T types.Identifiable](
 	c *Controller,
-	infoMsg string,
+	infoPrefix string,
 	logic func(T) ([]string, error),
 ) types.TaskHandler {
 	return func(msg types.RPCNotification) {
@@ -38,11 +38,16 @@ func BindHandler[T any](
 
 		c.Proc.Pool.Submit(func() {
 			start := time.Now()
-			c.NotifyTele(infoMsg, LogLevelInfo)
+			id := task.GetID()
+
+			c.NotifyTele(infoPrefix+": "+id, LogLevelInfo)
 
 			data, err := logic(task)
 
-			res := Result{Data: data}
+			res := types.Result{
+				ID:   id,
+				Data: data,
+			}
 			if err != nil {
 				res.Error = err.Error()
 			}
@@ -61,12 +66,12 @@ func (c *Controller) RegisterHandlers() {
 	}
 
 	c.Handlers[MethodSubmitTask] = middleware.Chain(
-		BindHandler(c, "Processing task...", c.Proc.Process),
+		BindHandler(c, "Processing task", c.Proc.Process),
 		stack...,
 	)
 
 	c.Handlers[MethodSubmitChat] = middleware.Chain(
-		BindHandler(c, "Thinking...", func(t ChatTask) ([]string, error) {
+		BindHandler(c, "Thinking...", func(t types.ChatTask) ([]string, error) {
 			resp, err := c.Proc.ProcessChat(t)
 			return []string{resp}, err
 		}),

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider"
 	"nvim-engine/mocks"
 )
@@ -62,7 +63,7 @@ func TestProcessorEmptyResponseFailover(t *testing.T) {
 	}
 
 	proc := NewProcessor(1, 10, providers)
-	task := Task{ID: "test-3", Action: "commit", Payload: "diff"}
+	task := types.Task{ID: "test-3", Action: "commit", Payload: "diff"}
 
 	result, err := proc.Process(task)
 	if err != nil {
@@ -89,7 +90,7 @@ func TestProcessorAllFailed(t *testing.T) {
 	}
 
 	proc := NewProcessor(1, 10, providers)
-	task := Task{ID: "test-2", Action: "commit", Payload: "diff..."}
+	task := types.Task{ID: "test-2", Action: "commit", Payload: "diff..."}
 
 	_, err := proc.Process(task)
 	if err == nil {

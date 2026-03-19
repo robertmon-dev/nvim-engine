@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/logger"
 	"nvim-engine/internal/provider"
 
@@ -32,7 +33,7 @@ func NewProcessor(workers, capacity int, providers map[provider.ID]provider.Prov
 	}
 }
 
-func (p *Processor) Process(task Task) ([]string, error) {
+func (p *Processor) Process(task types.Task) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -67,7 +68,7 @@ func (p *Processor) Process(task Task) ([]string, error) {
 	return nil, fmt.Errorf("all attempted providers failed:\n%w", errors.Join(errs...))
 }
 
-func (p *Processor) ProcessChat(task ChatTask) (string, error) {
+func (p *Processor) ProcessChat(task types.ChatTask) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 

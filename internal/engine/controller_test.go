@@ -36,7 +36,7 @@ func TestController_Dispatch_SubmitTask(t *testing.T) {
 
 	ctrl.RegisterHandlers()
 
-	task := Task{ID: "test-123", Action: "commit", Payload: "diff"}
+	task := types.Task{ID: "test-123", Action: "commit", Payload: "diff"}
 	taskBytes, _ := msgpack.Marshal(task)
 
 	msg := types.RPCNotification{
