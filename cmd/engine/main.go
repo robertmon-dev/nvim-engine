@@ -8,6 +8,7 @@ import (
 
 	"nvim-engine/internal/config"
 	"nvim-engine/internal/engine"
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/logger"
 	"nvim-engine/internal/provider"
 
@@ -35,9 +36,11 @@ func main() {
 	logger.AttachBridge(bridge)
 
 	ctrl := &engine.Controller{
-		Proc:   proc,
-		Bridge: bridge,
+		Proc:     proc,
+		Bridge:   bridge,
+		Handlers: make(map[engine.RPCMethod]types.TaskHandler),
 	}
+	ctrl.RegisterHandlers()
 
 	log.Info().Msg("Go Engine is armored and ready to receive MessagePack RPC")
 

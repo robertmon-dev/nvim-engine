@@ -4,7 +4,10 @@ import (
 	"io"
 	"os"
 	"syscall"
+	"time"
 
+	"nvim-engine/internal/engine/middleware"
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/logger"
 
 	"github.com/rs/zerolog/log"
@@ -12,8 +15,51 @@ import (
 )
 
 type Controller struct {
-	Proc   *Processor
-	Bridge *logger.NvimBridge
+	Proc     *Processor
+	Bridge   *logger.NvimBridge
+	Handlers map[RPCMethod]types.TaskHandler
+}
+
+func (c *Controller) RegisterHandlers() {
+	c.Handlers[MethodSubmitTask] = c.handleSubmitTask
+}
+
+func (c *Controller) applyMiddleware(handler types.TaskHandler) types.TaskHandler {
+	return middleware.WithRecovery(
+		middleware.WithLogging(
+			middleware.WithMeasure(handler),
+		),
+	)
+}
+
+func (c *Controller) handleSubmitTask(msg types.RPCNotification) {
+	if len(msg.Args) == 0 {
+		return
+	}
+
+	var task Task
+	if err := msgpack.Unmarshal(msg.Args[0], &task); err != nil {
+		c.NotifyTele("Failed processing task: "+err.Error(), LogLevelError)
+		return
+	}
+
+	c.Proc.Pool.Submit(func() {
+		start := time.Now()
+
+		c.NotifyTele("Processing task: "+task.ID, LogLevelInfo)
+		data, err := c.Proc.Process(task)
+
+		res := Result{ID: task.ID, Data: data}
+		if err != nil {
+			res.Error = err.Error()
+		}
+
+		log.Debug().Dur("actual_work_duration", time.Since(start)).Msg("Task finished in pool")
+
+		if err := c.Bridge.Notify(string(CallbackAIResult), res); err != nil {
+			log.Error().Err(err).Msg("failed to notify nvim")
+		}
+	})
 }
 
 func (c *Controller) Listen(dec *msgpack.Decoder, sigChan chan<- os.Signal) {
@@ -27,7 +73,7 @@ func (c *Controller) Listen(dec *msgpack.Decoder, sigChan chan<- os.Signal) {
 	}()
 
 	for {
-		var msg RPCNotification
+		var msg types.RPCNotification
 		err := dec.Decode(&msg)
 
 		if err == io.EOF {
@@ -50,42 +96,22 @@ func (c *Controller) Listen(dec *msgpack.Decoder, sigChan chan<- os.Signal) {
 	}
 }
 
-func (c *Controller) Dispatch(msg RPCNotification) {
+func (c *Controller) Dispatch(msg types.RPCNotification) {
 	if msg.Type != 2 {
 		return
 	}
 
-	switch msg.Method {
-	case "submit_task":
-		if len(msg.Args) == 0 {
-			return
-		}
+	method := RPCMethod(msg.Method)
 
-		var task Task
-		if err := msgpack.Unmarshal(msg.Args[0], &task); err != nil {
-			c.NotifyTele("Failed processing task: "+err.Error(), "ERROR")
-			return
-		}
-
-		c.Proc.Pool.Submit(func() {
-			c.NotifyTele("Processing task: "+task.ID, "INFO")
-
-			data, err := c.Proc.Process(task)
-
-			res := Result{ID: task.ID, Data: data}
-			if err != nil {
-				res.Error = err.Error()
-			}
-
-			if err := c.Bridge.Notify("on_ai_result", res); err != nil {
-				log.Error().Err(err).Msg("failed to notify nvim with ai result")
-			}
-		})
+	if handler, ok := c.Handlers[method]; ok {
+		handler(msg)
+	} else {
+		log.Debug().Str("method", msg.Method).Msg("Unknown RPC method")
 	}
 }
 
-func (c *Controller) NotifyTele(msg, level string) {
-	if err := c.Bridge.Notify("NvimEngineLog", msg, level, "Go-Engine"); err != nil {
+func (c *Controller) NotifyTele(msg string, level LogLevel) {
+	if err := c.Bridge.Notify(string(CallbackNvimLog), msg, string(level), EngineName); err != nil {
 		log.Error().Err(err).Msg("failed to send log to nvim")
 	}
 }

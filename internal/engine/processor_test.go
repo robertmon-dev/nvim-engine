@@ -43,33 +43,33 @@ func TestParseOptions(t *testing.T) {
 	}
 }
 
-func TestProcessorFailover(t *testing.T) {
-	failingMock := &mocks.MockProvider{
+func TestProcessorEmptyResponseFailover(t *testing.T) {
+	emptyMock := &mocks.MockProvider{
 		GenerateFunc: func(ctx context.Context, system, user string) (string, error) {
-			return "", errors.New("API RATE LIMIT")
+			return " \n ===OPTION=== \n ", nil
 		},
 	}
 
 	successMock := &mocks.MockProvider{
 		GenerateFunc: func(ctx context.Context, system, user string) (string, error) {
-			return "fix: saved the day", nil
+			return "feat: valid option", nil
 		},
 	}
 
 	providers := map[provider.ID]provider.Provider{
-		provider.Gemini:    failingMock,
+		provider.Gemini:    emptyMock,
 		provider.Anthropic: successMock,
 	}
 
 	proc := NewProcessor(1, 10, providers)
+	task := Task{ID: "test-3", Action: "commit", Payload: "diff"}
 
-	task := Task{ID: "test-1", Action: "commit", Payload: "diff..."}
 	result, err := proc.Process(task)
 	if err != nil {
 		t.Fatalf("Expected success via failover, got error: %v", err)
 	}
 
-	if len(result) == 0 || result[0] != "fix: saved the day" {
+	if len(result) == 0 || result[0] != "feat: valid option" {
 		t.Errorf("Bad result. Got: %v", result)
 	}
 }
@@ -85,6 +85,7 @@ func TestProcessorAllFailed(t *testing.T) {
 		provider.Gemini:    failingMock,
 		provider.Anthropic: failingMock,
 		provider.OpenAI:    failingMock,
+		provider.Ollama:    failingMock,
 	}
 
 	proc := NewProcessor(1, 10, providers)

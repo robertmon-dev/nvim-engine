@@ -28,16 +28,19 @@ func TestController_Dispatch_SubmitTask(t *testing.T) {
 	bridge := logger.NewNvimBridge(enc)
 
 	ctrl := &Controller{
-		Proc:   proc,
-		Bridge: bridge,
+		Proc:     proc,
+		Bridge:   bridge,
+		Handlers: make(map[RPCMethod]TaskHandler),
 	}
+
+	ctrl.RegisterHandlers()
 
 	task := Task{ID: "test-123", Action: "commit", Payload: "diff"}
 	taskBytes, _ := msgpack.Marshal(task)
 
 	msg := RPCNotification{
 		Type:   2,
-		Method: "submit_task",
+		Method: string(MethodSubmitTask),
 		Args:   []msgpack.RawMessage{taskBytes},
 	}
 

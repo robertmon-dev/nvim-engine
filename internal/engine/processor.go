@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -15,12 +16,19 @@ import (
 type Processor struct {
 	Pool      *pond.WorkerPool
 	Providers map[provider.ID]provider.Provider
+	Order     []provider.ID
 }
 
 func NewProcessor(workers, capacity int, providers map[provider.ID]provider.Provider) *Processor {
 	return &Processor{
 		Pool:      pond.New(workers, capacity),
 		Providers: providers,
+		Order: []provider.ID{
+			provider.Ollama,
+			provider.Gemini,
+			provider.Anthropic,
+			provider.OpenAI,
+		},
 	}
 }
 
@@ -28,23 +36,12 @@ func (p *Processor) Process(task Task) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	order := []provider.ID{
-		provider.Ollama,
-		provider.Gemini,
-		provider.Anthropic,
-		provider.OpenAI,
-	}
-
-	var lastErr error
+	var errs []error
 	var attemptedCount int
 
-	for _, id := range order {
+	for _, id := range p.Order {
 		prov, ok := p.Providers[id]
-		if !ok {
-			continue
-		}
-
-		if !prov.IsReady() {
+		if !ok || !prov.IsReady() {
 			continue
 		}
 
@@ -56,34 +53,40 @@ func (p *Processor) Process(task Task) ([]string, error) {
 			if len(options) > 0 {
 				return options, nil
 			}
+
+			err = fmt.Errorf("returned empty response")
 		}
 
-		lastErr = err
+		errs = append(errs, fmt.Errorf("[%s failed]: %w", id, err))
 	}
 
 	if attemptedCount == 0 {
 		return nil, fmt.Errorf("no API keys or local providers configured")
 	}
 
-	return nil, fmt.Errorf("all providers failed. last error: %v", lastErr)
+	return nil, fmt.Errorf("all attempted providers failed:\n%w", errors.Join(errs...))
 }
 
 func parseOptions(raw string) []string {
 	if !strings.Contains(raw, "===OPTION===") {
-		trimmed := strings.TrimSpace(raw)
-		if trimmed != "" {
+		if trimmed := strings.TrimSpace(raw); trimmed != "" {
 			return []string{trimmed}
 		}
+
 		return nil
 	}
 
-	var options []string
 	parts := strings.Split(raw, "===OPTION===")
+	options := make([]string, 0, len(parts))
+
 	for _, p := range parts {
-		trimmed := strings.TrimSpace(p)
-		if trimmed != "" {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
 			options = append(options, trimmed)
 		}
+	}
+
+	if len(options) == 0 {
+		return nil
 	}
 
 	return options
