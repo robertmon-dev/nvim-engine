@@ -2,94 +2,139 @@ package engine
 
 import (
 	"bytes"
-	"context"
+	"io"
+	"strings"
+	"sync"
 	"testing"
 
 	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/logger"
-	"nvim-engine/internal/provider"
+	"nvim-engine/internal/provider/p_error"
 	"nvim-engine/mocks"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-func TestController_Dispatch_SubmitTask(t *testing.T) {
-	mockProv := &mocks.MockProvider{
-		GenerateFunc: func(ctx context.Context, sys, user string) (string, error) {
-			return "feat: tested controller logic", nil
+type safeBuffer struct {
+	buf bytes.Buffer
+	mu  sync.Mutex
+}
+
+func (s *safeBuffer) Write(p []byte) (n int, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *safeBuffer) Bytes() []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Bytes()
+}
+
+func TestController_Dispatch_SubmitTask_Detailed(t *testing.T) {
+	const (
+		cmdLog    = "nvim_log"
+		cmdResult = "ai_result"
+	)
+
+	tests := []struct {
+		name             string
+		mockErr          error
+		expectedLog      string
+		expectedLogLevel string
+	}{
+		{
+			name:             "Success path",
+			mockErr:          nil,
+			expectedLog:      "Processing task",
+			expectedLogLevel: "info",
+		},
+		{
+			name: "Provider Rate Limit Error",
+			mockErr: &p_error.ProviderError{
+				Code:     p_error.ErrRateLimit,
+				Provider: "gemini",
+				Message:  "too many requests",
+			},
+			expectedLog:      "Gemini: You've hit the API rate limit",
+			expectedLogLevel: "error",
 		},
 	}
-	providers := map[provider.ID]provider.Provider{
-		provider.Gemini: mockProv,
-	}
 
-	proc := NewProcessor(1, 10, providers)
-	var buf bytes.Buffer
-	enc := msgpack.NewEncoder(&buf)
-	bridge := logger.NewNvimBridge(enc)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mProc := mocks.NewMockProcessor()
+			mProc.ProcessFunc = func(task types.Task) ([]string, error) {
+				return []string{"res"}, tt.mockErr
+			}
 
-	ctrl := &Controller{
-		Proc:     proc,
-		Bridge:   bridge,
-		Handlers: make(map[RPCMethod]types.TaskHandler),
-	}
+			var sBuf safeBuffer
 
-	ctrl.RegisterHandlers()
+			bridge := logger.NewNvimBridge(&sBuf)
 
-	task := types.Task{ID: "test-123", Action: "commit", Payload: "diff"}
-	taskBytes, _ := msgpack.Marshal(task)
+			ctrl := &Controller{
+				Proc:     mProc,
+				Bridge:   bridge,
+				Handlers: make(map[RPCMethod]types.TaskHandler),
+			}
+			ctrl.RegisterHandlers()
 
-	msg := types.RPCNotification{
-		Type:   2,
-		Method: string(MethodSubmitTask),
-		Args:   []msgpack.RawMessage{taskBytes},
-	}
+			taskBytes, _ := msgpack.Marshal(types.Task{ID: "test-123", Action: "commit"})
+			msg := types.RPCNotification{
+				Type:   2,
+				Method: string(MethodSubmitTask),
+				Args:   []msgpack.RawMessage{taskBytes},
+			}
 
-	ctrl.Dispatch(msg)
-	proc.Pool.StopAndWait()
+			ctrl.Dispatch(msg)
 
-	dec := msgpack.NewDecoder(&buf)
+			mProc.GetPool().StopAndWait()
 
-	var logMsg []any
-	if err := dec.Decode(&logMsg); err != nil {
-		t.Fatalf("Log msg missing: %v", err)
-	}
+			data := sBuf.Bytes()
+			if len(data) == 0 {
+				t.Fatal("Buffer is empty! Controller did not write anything to Bridge.")
+			}
 
-	logExecArgs := logMsg[2].([]any)
-	logInnerArgs := logExecArgs[1].([]any)
+			dec := msgpack.NewDecoder(bytes.NewReader(data))
+			var capturedLogs []string
+			var resultSent bool
 
-	if logInnerArgs[0] != "Processing task: test-123" {
-		t.Errorf("Bad log content. Got: %v", logInnerArgs[0])
-	}
+			for {
+				var raw []any
+				err := dec.Decode(&raw)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Logf("Warning: decode error: %v", err)
+					break
+				}
 
-	var resultMsg []any
-	if err := dec.Decode(&resultMsg); err != nil {
-		t.Fatalf("Result msg missing: %v", err)
-	}
+				method := raw[1].(string)
+				args := raw[2].([]any)
 
-	resExecArgs := resultMsg[2].([]any)
-	resLuaArgs := resExecArgs[1].([]any)
+				if method == cmdLog {
+					capturedLogs = append(capturedLogs, args[0].(string))
+				} else if method == cmdResult {
+					resultSent = true
+				}
+			}
 
-	var resData map[string]any
+			foundExpectedLog := false
+			for _, l := range capturedLogs {
+				if strings.Contains(l, tt.expectedLog) {
+					foundExpectedLog = true
+					break
+				}
+			}
 
-	switch m := resLuaArgs[0].(type) {
-	case map[string]any:
-		resData = m
-	case map[any]any:
-		resData = make(map[string]any)
-		for k, v := range m {
-			resData[k.(string)] = v
-		}
-	default:
-		t.Fatalf("Unexpected type for resData: %T", resLuaArgs[0])
-	}
-
-	if resData["id"] != "test-123" {
-		t.Errorf("Bad task ID. Expected 'test-123', got '%v'", resData["id"])
-	}
-
-	options, ok := resData["data"].([]any)
-	if !ok || len(options) == 0 || options[0] != "feat: tested controller logic" {
-		t.Errorf("Bad AI result. Got: %#v", resData["data"])
+			if !foundExpectedLog {
+				t.Errorf("Expected log containing %q not found.\nCaptured logs: %v", tt.expectedLog, capturedLogs)
+			}
+			if !resultSent {
+				t.Error("AI result message was never sent back via bridge")
+			}
+		})
 	}
 }

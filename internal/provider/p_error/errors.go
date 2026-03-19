@@ -45,8 +45,7 @@ func (e *ProviderError) Friendly() string {
 		base = friendlyMessages[ErrUnknown]
 	}
 
-	providerName := strings.Title(strings.ToLower(e.Provider))
-
+	providerName := strings.ToUpper(e.Provider[:1]) + strings.ToLower(e.Provider[1:])
 	return fmt.Sprintf("%s: %s", providerName, base)
 }
 
@@ -122,6 +121,7 @@ func findString(data map[string]any, keys ...string) string {
 		if s, ok := val.(string); ok {
 			return s
 		}
+
 		if nextMap, ok := val.(map[string]any); ok {
 			return findString(nextMap, keys...)
 		}

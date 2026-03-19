@@ -30,9 +30,8 @@ func main() {
 	proc := engine.NewProcessor(cfg.Engine.Workers, cfg.Engine.Capacity, providers)
 
 	dec := msgpack.NewDecoder(os.Stdin)
-	enc := msgpack.NewEncoder(os.Stdout)
 
-	bridge := logger.NewNvimBridge(enc)
+	bridge := logger.NewNvimBridge(os.Stdout)
 	logger.AttachBridge(bridge)
 
 	ctrl := &engine.Controller{

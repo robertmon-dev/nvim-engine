@@ -1,22 +1,25 @@
 package engine
 
 import (
+	"errors"
 	"io"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 
 	"nvim-engine/internal/engine/middleware"
 	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/logger"
+	"nvim-engine/internal/provider/p_error"
 
 	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
 type Controller struct {
-	Proc     *Processor
-	Bridge   *logger.NvimBridge
+	Proc     ProcessorInterface
+	Bridge   logger.NvimBridgeInterface
 	Handlers map[RPCMethod]types.TaskHandler
 }
 
@@ -36,11 +39,11 @@ func BindHandler[T types.Identifiable](
 			return
 		}
 
-		c.Proc.Pool.Submit(func() {
+		c.Proc.Submit(func() {
 			start := time.Now()
 			id := task.GetID()
 
-			c.NotifyTele(infoPrefix+": "+id, LogLevelInfo)
+			c.NotifyTele(infoPrefix, LogLevelInfo)
 
 			data, err := logic(task)
 
@@ -48,19 +51,35 @@ func BindHandler[T types.Identifiable](
 				ID:   id,
 				Data: data,
 			}
+
 			if err != nil {
+				c.handleErrorTelemetry(err)
 				res.Error = err.Error()
 			}
 
-			log.Debug().Dur("duration", time.Since(start)).Msg("Task processed")
+			log.Debug().Dur("duration", time.Since(start)).Str("task_id", id).Msg("Task processed")
+
 			if err := c.Bridge.Notify(string(CallbackAIResult), res); err != nil {
-				log.Error().
-					Err(err).
-					Str("task_id", id).
-					Msg("failed to send task result back to nvim")
+				log.Error().Err(err).Str("task_id", id).Msg("failed to send result back")
 			}
 		})
 	}
+}
+
+func (c *Controller) handleErrorTelemetry(err error) {
+	var pErr *p_error.ProviderError
+
+	if errors.As(err, &pErr) {
+		c.NotifyTele(pErr.Friendly(), LogLevelError)
+		return
+	}
+
+	if strings.Contains(err.Error(), "all attempted providers failed") {
+		c.NotifyTele("All AI providers failed. Check :messages for details.", LogLevelError)
+		return
+	}
+
+	c.NotifyTele("Engine error: "+err.Error(), LogLevelError)
 }
 
 func (c *Controller) RegisterHandlers() {
