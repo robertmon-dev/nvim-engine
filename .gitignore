@@ -50,3 +50,17 @@ Thumbs.db
 .project
 .settings/
 .classpath
+
+# --- Python Specific ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/

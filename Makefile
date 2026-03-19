@@ -6,6 +6,13 @@ APP_NAME := nvim-ai-engine
 BUILD_DIR := bin
 MAIN_PKG := ./cmd/engine
 INSTALL_DIR := $(HOME)/.config/nvim/bin
+VENV = tests/.venv
+PYTHON = $(VENV)/bin/python
+PIP = $(VENV)/bin/pip
+
+$(VENV):
+	@python3 -m venv $(VENV)
+	@$(PIP) install -q -r tests/requirements.txt
 
 .PHONY: all
 all: build
@@ -45,6 +52,11 @@ release:
 test:
 	@echo "=> Running tests..."
 	@go test -v -race ./...
+
+.PHONY: test-integration
+test-integration: build $(VENV)
+	@echo "=> Running E2E Integration Tests..."
+	@$(VENV)/bin/pytest -v --timeout=15 tests/integration
 
 .PHONY: cover
 cover:
