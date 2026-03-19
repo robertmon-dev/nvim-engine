@@ -53,7 +53,12 @@ func BindHandler[T types.Identifiable](
 			}
 
 			log.Debug().Dur("duration", time.Since(start)).Msg("Task processed")
-			c.Bridge.Notify(string(CallbackAIResult), res)
+			if err := c.Bridge.Notify(string(CallbackAIResult), res); err != nil {
+				log.Error().
+					Err(err).
+					Str("task_id", id).
+					Msg("failed to send task result back to nvim")
+			}
 		})
 	}
 }
