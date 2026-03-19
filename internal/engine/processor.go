@@ -67,6 +67,34 @@ func (p *Processor) Process(task Task) ([]string, error) {
 	return nil, fmt.Errorf("all attempted providers failed:\n%w", errors.Join(errs...))
 }
 
+func (p *Processor) ProcessChat(task ChatTask) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	fullPrompt := ""
+	if len(task.History) > 0 {
+		fullPrompt = strings.Join(task.History, "\n") + "\n"
+	}
+	fullPrompt += "User: " + task.Prompt
+
+	var errs []error
+	for _, id := range p.Order {
+		prov, ok := p.Providers[id]
+		if !ok || !prov.IsReady() {
+			continue
+		}
+
+		res, err := prov.Generate(ctx, ChatSystemPrompt, fullPrompt)
+		if err == nil && strings.TrimSpace(res) != "" {
+			return res, nil
+		}
+
+		errs = append(errs, fmt.Errorf("[%s failed]: %w", id, err))
+	}
+
+	return "", fmt.Errorf("chat failed for all providers:\n%w", errors.Join(errs...))
+}
+
 func parseOptions(raw string) []string {
 	if !strings.Contains(raw, "===OPTION===") {
 		if trimmed := strings.TrimSpace(raw); trimmed != "" {

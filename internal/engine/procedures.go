@@ -8,6 +8,7 @@ type (
 
 const (
 	MethodSubmitTask RPCMethod = "submit_task"
+	MethodSubmitChat RPCMethod = "submit_chat"
 
 	CallbackAIResult RPCCallback = "on_ai_result"
 	CallbackNvimLog  RPCCallback = "NvimEngineLog"

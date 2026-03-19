@@ -8,6 +8,12 @@ type Task struct {
 	Payload string `msgpack:"payload"`
 }
 
+type ChatTask struct {
+	ID      string `msgpack:"id"`
+	Prompt  string `msgpack:"prompt"`
+	History []any  `msgpack:"history,omitempty"`
+}
+
 type Result struct {
 	ID    string   `msgpack:"id"`
 	Data  []string `msgpack:"data"`

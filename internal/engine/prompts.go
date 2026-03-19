@@ -20,4 +20,6 @@ CONSTRAINTS:
 ADDITIONAL RULES FOR THIS REQUEST:
 - Provide exactly 3 alternative commit message options.
 - Separate each option with exactly this string: ===OPTION===`
+
+	ChatSystemPrompt = "You are a helpful AI assistant integrated into Neovim."
 )

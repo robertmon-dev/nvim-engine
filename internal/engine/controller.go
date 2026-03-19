@@ -60,6 +60,34 @@ func (c *Controller) handleSubmitTask(msg types.RPCNotification) {
 	})
 }
 
+func (c *Controller) handleChat(msg types.RPCNotification) {
+	if len(msg.Args) == 0 {
+		return
+	}
+
+	var chatTask ChatTask
+	if err := msgpack.Unmarshal(msg.Args[0], &chatTask); err != nil {
+		c.NotifyTele("Chat unmarshal error: "+err.Error(), LogLevelError)
+		return
+	}
+
+	c.Proc.Pool.Submit(func() {
+		start := time.Now()
+		c.NotifyTele("Chatting: "+chatTask.ID, LogLevelInfo)
+
+		data, err := c.Proc.ProcessChat(chatTask)
+
+		res := Result{ID: chatTask.ID, Data: data}
+		if err != nil {
+			res.Error = err.Error()
+		}
+
+		log.Debug().Dur("chat_duration", time.Since(start)).Msg("Chat task finished")
+
+		c.Bridge.Notify(string(CallbackAIResult), res)
+	})
+}
+
 func (c *Controller) Listen(dec *msgpack.Decoder, sigChan chan<- os.Signal) {
 	log := logger.Get()
 
