@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
+
+	"nvim-engine/internal/provider/p_error"
 )
 
 type OllamaProvider struct {
@@ -33,7 +33,7 @@ type ollamaResponse struct {
 
 func (p *OllamaProvider) Generate(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
 	if !p.IsReady() {
-		return "", errors.New("ollama provider is not properly configured")
+		return "", p_error.NewConfigError(string(Ollama))
 	}
 
 	reqBody := ollamaRequest{
@@ -47,26 +47,22 @@ func (p *OllamaProvider) Generate(ctx context.Context, systemPrompt, userPrompt 
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal ollama request: %w", err)
+		return "", err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.URL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := sendRequest[ollamaResponse](req)
-	if err != nil {
 		return "", err
 	}
+	req.Header.Set("Content-Type", "application/json")
 
-	if resp.Error != "" {
-		return "", fmt.Errorf("ollama api error: %s", resp.Error)
-	}
+	return performRequest(ctx, Ollama, req, func(res ollamaResponse) string {
+		if res.Error != "" {
+			return ""
+		}
 
-	return resp.Message.Content, nil
+		return res.Message.Content
+	})
 }
 
 func (p *OllamaProvider) IsReady() bool {

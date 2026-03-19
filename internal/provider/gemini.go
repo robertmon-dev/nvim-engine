@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"nvim-engine/internal/provider/p_error"
 )
 
 type GeminiProvider struct {
@@ -37,7 +39,9 @@ type geminiResponse struct {
 }
 
 func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (string, error) {
-	endpoint := fmt.Sprintf("%s/%s:generateContent?key=%s", g.URL, g.Model, g.APIKey)
+	if !g.IsReady() {
+		return "", p_error.NewConfigError(string(Gemini))
+	}
 
 	payload := geminiPayload{
 		Contents: []geminiContent{
@@ -48,28 +52,21 @@ func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (str
 			},
 		},
 	}
-
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", err
-	}
+	endpoint := fmt.Sprintf("%s/%s:generateContent?key=%s", g.URL, g.Model, g.APIKey)
+	req, _ := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
 
-	result, err := sendRequest[geminiResponse](req)
-	if err != nil {
-		return "", err
-	}
-
-	if len(result.Candidates) == 0 {
-		return "", fmt.Errorf("gemini returned no candidates")
-	}
-
-	return result.Candidates[0].Content.Parts[0].Text, nil
+	return performRequest(ctx, Gemini, req, func(res geminiResponse) string {
+		if len(res.Candidates) > 0 && len(res.Candidates[0].Content.Parts) > 0 {
+			return res.Candidates[0].Content.Parts[0].Text
+		}
+		return ""
+	})
 }
 
 func (o *GeminiProvider) IsReady() bool {

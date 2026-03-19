@@ -9,6 +9,7 @@ import (
 
 	"nvim-engine/internal/config"
 	"nvim-engine/internal/logger"
+	"nvim-engine/internal/provider/p_error"
 )
 
 type ID string
@@ -23,37 +24,6 @@ const (
 type Provider interface {
 	Generate(ctx context.Context, systemPrompt, userPrompt string) (string, error)
 	IsReady() bool
-}
-
-func sendRequest[T any](req *http.Request) (T, error) {
-	var target T
-	log := logger.Get()
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return target, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return target, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	log.Trace().
-		Int("status", resp.StatusCode).
-		Str("body", string(bodyBytes)).
-		Msg("Received API response")
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return target, fmt.Errorf("api error: status code %d, body: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	if err := json.Unmarshal(bodyBytes, &target); err != nil {
-		return target, err
-	}
-
-	return target, nil
 }
 
 func InitFromConfig(cfg *config.Config) map[ID]Provider {
@@ -78,4 +48,55 @@ func InitFromConfig(cfg *config.Config) map[ID]Provider {
 			URL:   cfg.Providers.OllamaURL,
 		},
 	}
+}
+
+func sendRequest[T any](req *http.Request) (T, []byte, int, error) {
+	var target T
+	log := logger.Get()
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return target, nil, 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return target, nil, resp.StatusCode, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	log.Trace().
+		Int("status", resp.StatusCode).
+		Str("body", string(bodyBytes)).
+		Msg("Received API response")
+
+	return target, bodyBytes, resp.StatusCode, nil
+}
+
+func performRequest[T any](
+	ctx context.Context,
+	providerID ID,
+	req *http.Request,
+	extractor func(T) string,
+) (string, error) {
+	_, body, status, err := sendRequest[T](req)
+	if err != nil {
+		return "", err
+	}
+
+	if status < 200 || status >= 300 {
+		return "", p_error.FromResponse(string(providerID), status, body)
+	}
+
+	var result T
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("failed to decode %s response: %w", providerID, err)
+	}
+
+	content := extractor(result)
+	if content == "" {
+		return "", p_error.FromResponse(string(providerID), status, body)
+	}
+
+	return content, nil
 }

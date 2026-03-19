@@ -2,7 +2,7 @@ package logger
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -10,12 +10,16 @@ import (
 )
 
 type NvimBridge struct {
-	mu  sync.Mutex
-	enc *msgpack.Encoder
+	mu sync.Mutex
+	w  io.Writer
 }
 
-func NewNvimBridge(enc *msgpack.Encoder) *NvimBridge {
-	return &NvimBridge{enc: enc}
+type NvimBridgeInterface interface {
+	Notify(method string, args ...any) error
+}
+
+func NewNvimBridge(w io.Writer) *NvimBridge {
+	return &NvimBridge{w: w}
 }
 
 func AttachBridge(b *NvimBridge) {
@@ -23,20 +27,28 @@ func AttachBridge(b *NvimBridge) {
 }
 
 func (b *NvimBridge) Notify(method string, args ...any) error {
+	if b == nil || b.w == nil {
+		return fmt.Errorf("bridge not initialized")
+	}
+
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if args == nil {
-		args = []any{}
-	}
-
 	luaCode := fmt.Sprintf("return _G['%s'](...)", method)
 
-	return b.enc.Encode([]any{
+	packet := []any{
 		2,
 		"nvim_exec_lua",
 		[]any{luaCode, args},
-	})
+	}
+
+	data, err := msgpack.Marshal(packet)
+	if err != nil {
+		return err
+	}
+
+	_, err = b.w.Write(data)
+	return err
 }
 
 type NvimLogHook struct {
@@ -56,8 +68,6 @@ func (h *NvimLogHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
 	}
 
 	go func() {
-		if err := h.bridge.Notify("NvimEngineLog", msg, lvlStr, "Go-Engine"); err != nil {
-			fmt.Fprintf(os.Stderr, "RPC Log Error: %v\n", err)
-		}
+		_ = h.bridge.Notify("NvimEngineLog", msg, lvlStr, "Go-Engine")
 	}()
 }

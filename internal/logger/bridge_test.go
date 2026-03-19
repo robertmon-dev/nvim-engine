@@ -42,8 +42,7 @@ func (s *SafeBuffer) WriteByte(c byte) error {
 
 func TestNvimBridge_Notify_Format(t *testing.T) {
 	var buf SafeBuffer
-	enc := msgpack.NewEncoder(&buf)
-	bridge := NewNvimBridge(enc)
+	bridge := NewNvimBridge(&buf)
 
 	method := "test_method"
 	err := bridge.Notify(method, "hello", 42)
@@ -78,8 +77,7 @@ func TestNvimBridge_Notify_Format(t *testing.T) {
 
 func TestNvimLogHook_Run(t *testing.T) {
 	var buf SafeBuffer
-	enc := msgpack.NewEncoder(&buf)
-	bridge := NewNvimBridge(enc)
+	bridge := NewNvimBridge(&buf)
 	hook := &NvimLogHook{bridge: bridge}
 
 	hook.Run(nil, zerolog.DebugLevel, "this is hidden")
@@ -107,13 +105,12 @@ func TestNvimLogHook_Run(t *testing.T) {
 
 func TestNvimBridge_Notify_Concurrency(t *testing.T) {
 	var buf SafeBuffer
-	enc := msgpack.NewEncoder(&buf)
-	bridge := NewNvimBridge(enc)
+	bridge := NewNvimBridge(&buf)
 
 	var wg sync.WaitGroup
 	workers := 100
 
-	for i := 0; i < workers; i++ {
+	for i := range workers {
 		wg.Add(1)
 		go func(val int) {
 			defer wg.Done()

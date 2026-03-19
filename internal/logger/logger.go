@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -19,17 +20,22 @@ func Get() *zerolog.Logger {
 	once.Do(func() {
 		cfg := config.Get()
 
-		file, err := os.OpenFile(cfg.Logger.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+		logPath := cfg.Logger.Path
+		if logPath == "" {
+			logPath = "/tmp/nvim-ai-engine.log"
+		}
 
-		var output os.File
+		file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+
+		var out io.Writer
 		if err != nil {
-			output = *os.Stderr
+			out = io.Discard
 		} else {
-			output = *file
+			out = file
 		}
 
 		consoleWriter := zerolog.ConsoleWriter{
-			Out:        &output,
+			Out:        out,
 			TimeFormat: time.TimeOnly,
 			NoColor:    true,
 		}

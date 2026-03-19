@@ -20,6 +20,21 @@ type Processor struct {
 	Order     []provider.ID
 }
 
+type ProcessorInterface interface {
+	Process(task types.Task) ([]string, error)
+	ProcessChat(task types.ChatTask) (string, error)
+	GetPool() *pond.WorkerPool
+	Submit(f func())
+}
+
+func (p *Processor) GetPool() *pond.WorkerPool {
+	return p.Pool
+}
+
+func (p *Processor) Submit(f func()) {
+	p.Pool.Submit(f)
+}
+
 func NewProcessor(workers, capacity int, providers map[provider.ID]provider.Provider) *Processor {
 	return &Processor{
 		Pool:      pond.New(workers, capacity),
