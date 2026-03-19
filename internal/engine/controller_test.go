@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/logger"
 	"nvim-engine/internal/provider"
 	"nvim-engine/mocks"
@@ -30,7 +31,7 @@ func TestController_Dispatch_SubmitTask(t *testing.T) {
 	ctrl := &Controller{
 		Proc:     proc,
 		Bridge:   bridge,
-		Handlers: make(map[RPCMethod]TaskHandler),
+		Handlers: make(map[RPCMethod]types.TaskHandler),
 	}
 
 	ctrl.RegisterHandlers()
@@ -38,7 +39,7 @@ func TestController_Dispatch_SubmitTask(t *testing.T) {
 	task := Task{ID: "test-123", Action: "commit", Payload: "diff"}
 	taskBytes, _ := msgpack.Marshal(task)
 
-	msg := RPCNotification{
+	msg := types.RPCNotification{
 		Type:   2,
 		Method: string(MethodSubmitTask),
 		Args:   []msgpack.RawMessage{taskBytes},

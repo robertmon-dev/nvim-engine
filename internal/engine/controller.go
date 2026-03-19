@@ -21,15 +21,13 @@ type Controller struct {
 }
 
 func (c *Controller) RegisterHandlers() {
-	c.Handlers[MethodSubmitTask] = c.handleSubmitTask
-}
+	commonMiddleware := []middleware.Middleware{
+		middleware.WithRecovery,
+		middleware.WithLogging,
+		middleware.WithMeasure,
+	}
 
-func (c *Controller) applyMiddleware(handler types.TaskHandler) types.TaskHandler {
-	return middleware.WithRecovery(
-		middleware.WithLogging(
-			middleware.WithMeasure(handler),
-		),
-	)
+	c.Handlers[MethodSubmitTask] = middleware.Chain(c.handleSubmitTask, commonMiddleware...)
 }
 
 func (c *Controller) handleSubmitTask(msg types.RPCNotification) {
