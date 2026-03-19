@@ -1,10 +1,8 @@
 package engine
 
 import (
-	"bytes"
 	"errors"
 	"strings"
-	"sync"
 	"testing"
 
 	"nvim-engine/internal/engine/types"
@@ -12,23 +10,6 @@ import (
 
 	"github.com/vmihailenco/msgpack/v5"
 )
-
-type safeBuffer struct {
-	buf bytes.Buffer
-	mu  sync.Mutex
-}
-
-func (s *safeBuffer) Write(p []byte) (n int, err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.buf.Write(p)
-}
-
-func (s *safeBuffer) Bytes() []byte {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.buf.Bytes()
-}
 
 func TestController_Dispatch_SubmitTask_Mocked(t *testing.T) {
 	tests := []struct {

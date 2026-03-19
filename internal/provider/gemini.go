@@ -38,14 +38,6 @@ type geminiResponse struct {
 	} `json:"candidates"`
 }
 
-type geminiErrorResponse struct {
-	Error struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Status  string `json:"status"`
-	} `json:"error"`
-}
-
 func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (string, error) {
 	if !g.IsReady() {
 		return "", p_error.NewConfigError(string(Gemini))
