@@ -20,72 +20,58 @@ type Controller struct {
 	Handlers map[RPCMethod]types.TaskHandler
 }
 
+func BindHandler[T any](
+	c *Controller,
+	infoMsg string,
+	logic func(T) ([]string, error),
+) types.TaskHandler {
+	return func(msg types.RPCNotification) {
+		if len(msg.Args) == 0 {
+			return
+		}
+
+		var task T
+		if err := msgpack.Unmarshal(msg.Args[0], &task); err != nil {
+			c.NotifyTele("Decoding error: "+err.Error(), LogLevelError)
+			return
+		}
+
+		c.Proc.Pool.Submit(func() {
+			start := time.Now()
+			c.NotifyTele(infoMsg, LogLevelInfo)
+
+			data, err := logic(task)
+
+			res := Result{Data: data}
+			if err != nil {
+				res.Error = err.Error()
+			}
+
+			log.Debug().Dur("duration", time.Since(start)).Msg("Task processed")
+			c.Bridge.Notify(string(CallbackAIResult), res)
+		})
+	}
+}
+
 func (c *Controller) RegisterHandlers() {
-	commonMiddleware := []middleware.Middleware{
+	stack := []middleware.Middleware{
 		middleware.WithRecovery,
 		middleware.WithLogging,
 		middleware.WithMeasure,
 	}
 
-	c.Handlers[MethodSubmitTask] = middleware.Chain(c.handleSubmitTask, commonMiddleware...)
-}
+	c.Handlers[MethodSubmitTask] = middleware.Chain(
+		BindHandler(c, "Processing task...", c.Proc.Process),
+		stack...,
+	)
 
-func (c *Controller) handleSubmitTask(msg types.RPCNotification) {
-	if len(msg.Args) == 0 {
-		return
-	}
-
-	var task Task
-	if err := msgpack.Unmarshal(msg.Args[0], &task); err != nil {
-		c.NotifyTele("Failed processing task: "+err.Error(), LogLevelError)
-		return
-	}
-
-	c.Proc.Pool.Submit(func() {
-		start := time.Now()
-
-		c.NotifyTele("Processing task: "+task.ID, LogLevelInfo)
-		data, err := c.Proc.Process(task)
-
-		res := Result{ID: task.ID, Data: data}
-		if err != nil {
-			res.Error = err.Error()
-		}
-
-		log.Debug().Dur("actual_work_duration", time.Since(start)).Msg("Task finished in pool")
-
-		if err := c.Bridge.Notify(string(CallbackAIResult), res); err != nil {
-			log.Error().Err(err).Msg("failed to notify nvim")
-		}
-	})
-}
-
-func (c *Controller) handleChat(msg types.RPCNotification) {
-	if len(msg.Args) == 0 {
-		return
-	}
-
-	var chatTask ChatTask
-	if err := msgpack.Unmarshal(msg.Args[0], &chatTask); err != nil {
-		c.NotifyTele("Chat unmarshal error: "+err.Error(), LogLevelError)
-		return
-	}
-
-	c.Proc.Pool.Submit(func() {
-		start := time.Now()
-		c.NotifyTele("Chatting: "+chatTask.ID, LogLevelInfo)
-
-		data, err := c.Proc.ProcessChat(chatTask)
-
-		res := Result{ID: chatTask.ID, Data: data}
-		if err != nil {
-			res.Error = err.Error()
-		}
-
-		log.Debug().Dur("chat_duration", time.Since(start)).Msg("Chat task finished")
-
-		c.Bridge.Notify(string(CallbackAIResult), res)
-	})
+	c.Handlers[MethodSubmitChat] = middleware.Chain(
+		BindHandler(c, "Thinking...", func(t ChatTask) ([]string, error) {
+			resp, err := c.Proc.ProcessChat(t)
+			return []string{resp}, err
+		}),
+		stack...,
+	)
 }
 
 func (c *Controller) Listen(dec *msgpack.Decoder, sigChan chan<- os.Signal) {
