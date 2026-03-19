@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"nvim-engine/internal/provider/p_errors"
+	"nvim-engine/internal/provider/p_error"
 )
 
 type GeminiProvider struct {
@@ -46,33 +46,10 @@ type geminiErrorResponse struct {
 	} `json:"error"`
 }
 
-func (g *GeminiProvider) mapError(status int, body []byte) error {
-	var gemErr geminiErrorResponse
-	_ = json.Unmarshal(body, &gemErr)
-
-	code := p_errors.ErrUnknown
-	switch status {
-	case 401, 403:
-		code = p_errors.ErrUnauthorized
-	case 429:
-		code = p_errors.ErrRateLimit
-	case 400:
-		code = p_errors.ErrInvalidRequest
-	case 500, 503, 504:
-		code = p_errors.ErrInternal
-	}
-
-	return &p_errors.ProviderError{
-		Code:     code,
-		Provider: string(Gemini),
-		Status:   status,
-		Message:  gemErr.Error.Message,
-		Raw:      string(body),
-	}
-}
-
 func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (string, error) {
-	endpoint := fmt.Sprintf("%s/%s:generateContent?key=%s", g.URL, g.Model, g.APIKey)
+	if !g.IsReady() {
+		return "", p_error.NewConfigError(string(Gemini))
+	}
 
 	payload := geminiPayload{
 		Contents: []geminiContent{
@@ -83,43 +60,21 @@ func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (str
 			},
 		},
 	}
-
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", err
-	}
+	endpoint := fmt.Sprintf("%s/%s:generateContent?key=%s", g.URL, g.Model, g.APIKey)
+	req, _ := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
 
-	_, body, status, err := sendRequest[geminiResponse](req)
-	if err != nil {
-		return "", err
-	}
-
-	if status < 200 || status >= 300 {
-		return "", g.mapError(status, body)
-	}
-
-	var result geminiResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("failed to decode gemini response: %w", err)
-	}
-
-	if len(result.Candidates) == 0 {
-		return "", &p_errors.ProviderError{
-			Code:     p_errors.ErrInvalidRequest,
-			Provider: string(Gemini),
-			Status:   status,
-			Message:  "Gemini returned no candidates. This usually happens when the content is blocked by safety filters.",
-			Raw:      string(body),
+	return performRequest(ctx, Gemini, req, func(res geminiResponse) string {
+		if len(res.Candidates) > 0 && len(res.Candidates[0].Content.Parts) > 0 {
+			return res.Candidates[0].Content.Parts[0].Text
 		}
-	}
-
-	return result.Candidates[0].Content.Parts[0].Text, nil
+		return ""
+	})
 }
 
 func (o *GeminiProvider) IsReady() bool {

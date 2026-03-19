@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
+
+	"nvim-engine/internal/provider/p_error"
 )
 
 type OpenAIProvider struct {
@@ -33,6 +34,10 @@ type openaiResponse struct {
 }
 
 func (o *OpenAIProvider) Generate(ctx context.Context, system, user string) (string, error) {
+	if !o.IsReady() {
+		return "", p_error.NewConfigError(string(OpenAI))
+	}
+
 	payload := openaiPayload{
 		Model: o.Model,
 		Messages: []openaiMessage{
@@ -41,28 +46,18 @@ func (o *OpenAIProvider) Generate(ctx context.Context, system, user string) (str
 		},
 	}
 
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
+	jsonData, _ := json.Marshal(payload)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", o.URL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", err
-	}
+	req, _ := http.NewRequestWithContext(ctx, "POST", o.URL, bytes.NewBuffer(jsonData))
 	req.Header.Set("Authorization", "Bearer "+o.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	result, err := sendRequest[openaiResponse](req)
-	if err != nil {
-		return "", err
-	}
-
-	if len(result.Choices) == 0 || result.Choices[0].Message.Content == "" {
-		return "", fmt.Errorf("openai returned empty response")
-	}
-
-	return result.Choices[0].Message.Content, nil
+	return performRequest(ctx, OpenAI, req, func(res openaiResponse) string {
+		if len(res.Choices) > 0 {
+			return res.Choices[0].Message.Content
+		}
+		return ""
+	})
 }
 
 func (o *OpenAIProvider) IsReady() bool {

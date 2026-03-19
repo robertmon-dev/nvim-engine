@@ -6,7 +6,107 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"nvim-engine/internal/provider/p_error"
 )
+
+func TestAnthropicProvider_Generate(t *testing.T) {
+	tests := []struct {
+		name            string
+		status          int
+		responseBody    any
+		expectedResult  string
+		expectedErrCode p_error.ErrorCode
+	}{
+		{
+			name:   "Success response",
+			status: http.StatusOK,
+			responseBody: anthropicResponse{
+				Content: []struct {
+					Text string `json:"text"`
+				}{{Text: "hello from claude"}},
+			},
+			expectedResult: "hello from claude",
+		},
+		{
+			name:   "Overloaded error (529)",
+			status: 529,
+			responseBody: map[string]any{
+				"type": "error",
+				"error": map[string]any{
+					"type":    "overloaded_error",
+					"message": "Anthropic is overloaded",
+				},
+			},
+			expectedErrCode: p_error.ErrInternal,
+		},
+		{
+			name:   "Authentication error (401)",
+			status: http.StatusUnauthorized,
+			responseBody: map[string]any{
+				"type": "error",
+				"error": map[string]any{
+					"type":    "authentication_error",
+					"message": "invalid x-api-key",
+				},
+			},
+			expectedErrCode: p_error.ErrUnauthorized,
+		},
+		{
+			name:   "Empty content error",
+			status: http.StatusOK,
+			responseBody: anthropicResponse{
+				Content: nil,
+			},
+			expectedErrCode: p_error.ErrInternal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("x-api-key") != "test-anthropic-key" {
+					t.Errorf("Missing or invalid x-api-key")
+				}
+				if r.Header.Get("anthropic-version") == "" {
+					t.Errorf("Missing anthropic-version header")
+				}
+
+				w.WriteHeader(tt.status)
+				_ = json.NewEncoder(w).Encode(tt.responseBody)
+			}))
+			defer server.Close()
+
+			prov := &AnthropicProvider{
+				APIKey: "test-anthropic-key",
+				Model:  "claude-3-sonnet",
+				URL:    server.URL,
+			}
+
+			result, err := prov.Generate(context.Background(), "sys", "user")
+
+			if tt.expectedErrCode != "" {
+				if err == nil {
+					t.Fatal("Expected error, got nil")
+				}
+				pErr, ok := err.(*p_error.ProviderError)
+				if !ok {
+					t.Fatalf("Expected *p_error.ProviderError, got %T", err)
+				}
+				if pErr.Code != tt.expectedErrCode {
+					t.Errorf("Expected code %v, got %v", tt.expectedErrCode, pErr.Code)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected success, got error: %v", err)
+				}
+				if result != tt.expectedResult {
+					t.Errorf("Expected %q, got %q", tt.expectedResult, result)
+				}
+			}
+		})
+	}
+}
 
 func TestOpenAIProvider_Generate(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -45,128 +145,178 @@ func TestOpenAIProvider_Generate(t *testing.T) {
 }
 
 func TestGeminiProvider_Generate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := geminiResponse{}
-		candidate := struct {
-			Content struct {
-				Parts []struct {
-					Text string `json:"text"`
-				} `json:"parts"`
-			} `json:"content"`
-		}{}
-		candidate.Content.Parts = append(candidate.Content.Parts, struct {
-			Text string `json:"text"`
-		}{Text: "hello from mock gemini"})
-		resp.Candidates = append(resp.Candidates, candidate)
-
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	prov := &GeminiProvider{
-		APIKey: "test-gemini-key",
-		Model:  "gemini-test",
-		URL:    server.URL,
+	tests := []struct {
+		name            string
+		status          int
+		responseBody    any
+		expectedResult  string
+		expectedErrCode p_error.ErrorCode
+	}{
+		{
+			name:   "Success response",
+			status: http.StatusOK,
+			responseBody: geminiResponse{
+				Candidates: []struct {
+					Content struct {
+						Parts []struct {
+							Text string `json:"text"`
+						} `json:"parts"`
+					} `json:"content"`
+				}{
+					{
+						Content: struct {
+							Parts []struct {
+								Text string `json:"text"`
+							} `json:"parts"`
+						}{
+							Parts: []struct {
+								Text string `json:"text"`
+							}{{Text: "hello from mock"}},
+						},
+					},
+				},
+			},
+			expectedResult: "hello from mock",
+		},
+		{
+			name:   "Rate limit error",
+			status: http.StatusTooManyRequests,
+			responseBody: map[string]any{
+				"error": map[string]any{"message": "Quota exceeded", "status": "RESOURCE_EXHAUSTED"},
+			},
+			expectedErrCode: p_error.ErrRateLimit,
+		},
+		{
+			name:            "Safety block (empty candidates)",
+			status:          http.StatusOK,
+			responseBody:    geminiResponse{Candidates: nil},
+			expectedErrCode: p_error.ErrInvalidRequest,
+		},
 	}
 
-	result, err := prov.Generate(context.Background(), "system", "user")
-	if err != nil {
-		t.Fatalf("Expected success, got error: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.status)
+				_ = json.NewEncoder(w).Encode(tt.responseBody)
+			}))
+			defer server.Close()
 
-	if result != "hello from mock gemini" {
-		t.Errorf("Expected 'hello from mock gemini', got: %v", result)
-	}
-}
+			prov := &GeminiProvider{
+				APIKey: "test-key",
+				Model:  "test-model",
+				URL:    server.URL,
+			}
 
-func TestAnthropicProvider_Generate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("x-api-key") != "test-anthropic-key" {
-			t.Errorf("Expected valid x-api-key header, got: %v", r.Header.Get("x-api-key"))
-		}
+			result, err := prov.Generate(context.Background(), "sys", "user")
 
-		resp := anthropicResponse{}
-		content := struct {
-			Text string `json:"text"`
-		}{Text: "hello from mock claude"}
-		resp.Content = append(resp.Content, content)
-
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	prov := &AnthropicProvider{
-		APIKey: "test-anthropic-key",
-		Model:  "claude-test",
-		URL:    server.URL,
-	}
-
-	result, err := prov.Generate(context.Background(), "system", "user")
-	if err != nil {
-		t.Fatalf("Expected success, got error: %v", err)
-	}
-
-	if result != "hello from mock claude" {
-		t.Errorf("Expected 'hello from mock claude', got: %v", result)
+			if tt.expectedErrCode != "" {
+				if err == nil {
+					t.Fatal("Expected error, got nil")
+				}
+				pErr, ok := err.(*p_error.ProviderError)
+				if !ok {
+					t.Fatalf("Expected *p_errors.ProviderError, got %T", err)
+				}
+				if pErr.Code != tt.expectedErrCode {
+					t.Errorf("Expected error code %v, got %v", tt.expectedErrCode, pErr.Code)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected success, got error: %v", err)
+				}
+				if result != tt.expectedResult {
+					t.Errorf("Expected %q, got %q", tt.expectedResult, result)
+				}
+			}
+		})
 	}
 }
 
 func TestOllamaProvider_Generate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := ollamaResponse{
-			Model: "llama3",
-			Message: ollamaMessage{
-				Role:    "assistant",
-				Content: "hello from mock ollama",
+	tests := []struct {
+		name            string
+		status          int
+		responseBody    any
+		expectedResult  string
+		expectedErrCode p_error.ErrorCode
+	}{
+		{
+			name:   "Success response",
+			status: http.StatusOK,
+			responseBody: ollamaResponse{
+				Model: "llama3",
+				Message: ollamaMessage{
+					Role:    "assistant",
+					Content: "hello from mock ollama",
+				},
 			},
-		}
-
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	prov := &OllamaProvider{
-		Model: "llama3",
-		URL:   server.URL,
+			expectedResult: "hello from mock ollama",
+		},
+		{
+			name:   "Model not found (404)",
+			status: http.StatusNotFound,
+			responseBody: ollamaResponse{
+				Error: "model 'llama3' not found",
+			},
+			expectedErrCode: p_error.ErrInvalidRequest,
+		},
+		{
+			name:   "Internal Server Error (500)",
+			status: http.StatusInternalServerError,
+			responseBody: ollamaResponse{
+				Error: "server copped out",
+			},
+			expectedErrCode: p_error.ErrInternal,
+		},
+		{
+			name:   "Error within 200 OK",
+			status: http.StatusOK,
+			responseBody: ollamaResponse{
+				Error: "out of memory",
+			},
+			expectedErrCode: p_error.ErrUnknown,
+		},
 	}
 
-	result, err := prov.Generate(context.Background(), "system", "user")
-	if err != nil {
-		t.Fatalf("Expected success, got error: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.status)
+				_ = json.NewEncoder(w).Encode(tt.responseBody)
+			}))
+			defer server.Close()
 
-	if result != "hello from mock ollama" {
-		t.Errorf("Expected 'hello from mock ollama', got: %v", result)
-	}
-}
+			prov := &OllamaProvider{
+				Model: "llama3",
+				URL:   server.URL,
+			}
 
-func TestOllamaProvider_ApiError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := ollamaResponse{
-			Error: "model 'llama3' not found, try pulling it first",
-		}
+			result, err := prov.Generate(context.Background(), "sys", "user")
 
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	prov := &OllamaProvider{
-		Model: "llama3",
-		URL:   server.URL,
-	}
-
-	_, err := prov.Generate(context.Background(), "system", "user")
-	if err == nil {
-		t.Fatal("Expected an error from Ollama response, but got nil")
-	}
-
-	expectedErr := "ollama api error: model 'llama3' not found, try pulling it first"
-	if err.Error() != expectedErr {
-		t.Errorf("Expected error %q, got: %q", expectedErr, err.Error())
+			if tt.expectedErrCode != "" {
+				if err == nil {
+					t.Fatal("Expected error, got nil")
+				}
+				pErr, ok := err.(*p_error.ProviderError)
+				if !ok {
+					t.Fatalf("Expected *p_errors.ProviderError, got %T", err)
+				}
+				if pErr.Code != tt.expectedErrCode {
+					t.Errorf("Expected code %v, got %v", tt.expectedErrCode, pErr.Code)
+				}
+				if pErr.Provider != string(Ollama) {
+					t.Errorf("Expected provider %s, got %s", Ollama, pErr.Provider)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected success, got error: %v", err)
+				}
+				if result != tt.expectedResult {
+					t.Errorf("Expected %q, got %q", tt.expectedResult, result)
+				}
+			}
+		})
 	}
 }
 
