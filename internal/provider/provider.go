@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"nvim-engine/internal/config"
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/logger"
 	"nvim-engine/internal/provider/p_error"
 )
@@ -23,6 +24,7 @@ const (
 
 type Provider interface {
 	Generate(ctx context.Context, systemPrompt, userPrompt string) (string, error)
+	GenerateChat(ctx context.Context, systemPrompt string, messages []types.Message) (string, error)
 	IsReady() bool
 }
 

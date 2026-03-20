@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider/p_error"
 )
 
@@ -35,6 +36,38 @@ func (a *AnthropicProvider) Generate(ctx context.Context, system, user string) (
 		},
 	}
 
+	return a.doRequest(ctx, payload)
+}
+
+func (a *AnthropicProvider) GenerateChat(ctx context.Context, systemPrompt string, messages []types.Message) (string, error) {
+	if !a.IsReady() {
+		return "", p_error.NewConfigError(string(Anthropic))
+	}
+
+	anthropicMessages := make([]map[string]string, 0, len(messages))
+
+	for _, msg := range messages {
+		if msg.Role == "system" {
+			continue
+		}
+
+		anthropicMessages = append(anthropicMessages, map[string]string{
+			"role":    msg.Role,
+			"content": msg.Content,
+		})
+	}
+
+	payload := map[string]interface{}{
+		"model":      a.Model,
+		"max_tokens": 1024,
+		"system":     systemPrompt,
+		"messages":   anthropicMessages,
+	}
+
+	return a.doRequest(ctx, payload)
+}
+
+func (a *AnthropicProvider) doRequest(ctx context.Context, payload map[string]interface{}) (string, error) {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", err

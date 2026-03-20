@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider/p_error"
 )
 
@@ -21,11 +22,13 @@ type geminiPart struct {
 }
 
 type geminiContent struct {
+	Role  string       `json:"role,omitempty"`
 	Parts []geminiPart `json:"parts"`
 }
 
 type geminiPayload struct {
-	Contents []geminiContent `json:"contents"`
+	SystemInstruction *geminiContent  `json:"system_instruction,omitempty"`
+	Contents          []geminiContent `json:"contents"`
 }
 
 type geminiResponse struct {
@@ -44,14 +47,43 @@ func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (str
 	}
 
 	payload := geminiPayload{
+		SystemInstruction: &geminiContent{
+			Parts: []geminiPart{{Text: system}},
+		},
 		Contents: []geminiContent{
 			{
-				Parts: []geminiPart{
-					{Text: system + "\n\n" + user},
-				},
+				Role:  "user",
+				Parts: []geminiPart{{Text: user}},
 			},
 		},
 	}
+
+	return g.doRequest(ctx, payload)
+}
+
+func (g *GeminiProvider) GenerateChat(ctx context.Context, system string, messages []types.Message) (string, error) {
+	payload := geminiPayload{
+		SystemInstruction: &geminiContent{
+			Parts: []geminiPart{{Text: system}},
+		},
+	}
+
+	for _, msg := range messages {
+		role := msg.Role
+		if role == "assistant" {
+			role = "model"
+		}
+
+		payload.Contents = append(payload.Contents, geminiContent{
+			Role:  role,
+			Parts: []geminiPart{{Text: msg.Content}},
+		})
+	}
+
+	return g.doRequest(ctx, payload)
+}
+
+func (g *GeminiProvider) doRequest(ctx context.Context, payload geminiPayload) (string, error) {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
@@ -69,6 +101,6 @@ func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (str
 	})
 }
 
-func (o *GeminiProvider) IsReady() bool {
-	return o.APIKey != "" && o.URL != ""
+func (g *GeminiProvider) IsReady() bool {
+	return g.APIKey != "" && g.URL != ""
 }

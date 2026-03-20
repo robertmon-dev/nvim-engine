@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider/p_error"
 )
 
@@ -46,9 +47,49 @@ func (o *OpenAIProvider) Generate(ctx context.Context, system, user string) (str
 		},
 	}
 
-	jsonData, _ := json.Marshal(payload)
+	return o.doRequest(ctx, payload)
+}
 
-	req, _ := http.NewRequestWithContext(ctx, "POST", o.URL, bytes.NewBuffer(jsonData))
+func (o *OpenAIProvider) GenerateChat(ctx context.Context, systemPrompt string, messages []types.Message) (string, error) {
+	if !o.IsReady() {
+		return "", p_error.NewConfigError(string(OpenAI))
+	}
+
+	openaiMessages := make([]openaiMessage, 0, len(messages)+1)
+
+	if systemPrompt != "" {
+		openaiMessages = append(openaiMessages, openaiMessage{
+			Role:    "system",
+			Content: systemPrompt,
+		})
+	}
+
+	for _, msg := range messages {
+		openaiMessages = append(openaiMessages, openaiMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		})
+	}
+
+	payload := openaiPayload{
+		Model:    o.Model,
+		Messages: openaiMessages,
+	}
+
+	return o.doRequest(ctx, payload)
+}
+
+func (o *OpenAIProvider) doRequest(ctx context.Context, payload openaiPayload) (string, error) {
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", o.URL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", err
+	}
+
 	req.Header.Set("Authorization", "Bearer "+o.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 

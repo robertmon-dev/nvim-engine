@@ -41,7 +41,7 @@ func main() {
 	}
 	ctrl.RegisterHandlers()
 
-	log.Info().Msg("Go Engine is armored and ready to receive MessagePack RPC")
+	log.Info().Msg("Bifröst is set and ready to receive MessagePack RPC")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

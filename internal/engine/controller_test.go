@@ -27,6 +27,11 @@ func TestController_Dispatch_SubmitTask_Mocked(t *testing.T) {
 			mockErr:     errors.New("processor explosion"),
 			expectedLog: "Engine error: processor explosion",
 		},
+		{
+			name:        "All providers failed telemetry",
+			mockErr:     errors.New("some context: all attempted providers failed: openai failed"),
+			expectedLog: "All AI providers failed. Check :messages for details.",
+		},
 	}
 
 	for _, tt := range tests {
