@@ -68,6 +68,6 @@ func (h *NvimLogHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
 	}
 
 	go func() {
-		_ = h.bridge.Notify("NvimEngineLog", msg, lvlStr, "Go-Engine")
+		_ = h.bridge.Notify("NvimEngineLog", msg, lvlStr, "Bifröst")
 	}()
 }

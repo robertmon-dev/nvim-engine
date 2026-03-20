@@ -15,5 +15,5 @@ const (
 
 	LogLevelInfo  LogLevel = "INFO"
 	LogLevelError LogLevel = "ERROR"
-	EngineName    string   = "Go-Engine"
+	EngineName    string   = "Bifröst"
 )
