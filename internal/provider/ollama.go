@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider/p_error"
 )
 
@@ -45,6 +46,40 @@ func (p *OllamaProvider) Generate(ctx context.Context, systemPrompt, userPrompt 
 		Stream: false,
 	}
 
+	return p.doRequest(ctx, reqBody)
+}
+
+func (p *OllamaProvider) GenerateChat(ctx context.Context, systemPrompt string, messages []types.Message) (string, error) {
+	if !p.IsReady() {
+		return "", p_error.NewConfigError(string(Ollama))
+	}
+
+	ollamaMessages := make([]ollamaMessage, 0, len(messages)+1)
+
+	if systemPrompt != "" {
+		ollamaMessages = append(ollamaMessages, ollamaMessage{
+			Role:    "system",
+			Content: systemPrompt,
+		})
+	}
+
+	for _, msg := range messages {
+		ollamaMessages = append(ollamaMessages, ollamaMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		})
+	}
+
+	reqBody := ollamaRequest{
+		Model:    p.Model,
+		Messages: ollamaMessages,
+		Stream:   false,
+	}
+
+	return p.doRequest(ctx, reqBody)
+}
+
+func (p *OllamaProvider) doRequest(ctx context.Context, reqBody ollamaRequest) (string, error) {
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", err
@@ -60,7 +95,6 @@ func (p *OllamaProvider) Generate(ctx context.Context, systemPrompt, userPrompt 
 		if res.Error != "" {
 			return ""
 		}
-
 		return res.Message.Content
 	})
 }

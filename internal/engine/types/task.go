@@ -12,10 +12,15 @@ type Task struct {
 
 func (t Task) GetID() string { return t.ID }
 
+type Message struct {
+	Role    string `msgpack:"role"`
+	Content string `msgpack:"content"`
+}
+
 type ChatTask struct {
-	ID      string   `msgpack:"id"`
-	Prompt  string   `msgpack:"prompt"`
-	History []string `msgpack:"history,omitempty"`
+	ID       string    `msgpack:"id"`
+	Prompt   string    `msgpack:"prompt"`
+	Messages []Message `msgpack:"messages"`
 }
 
 func (t ChatTask) GetID() string { return t.ID }

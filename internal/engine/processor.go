@@ -87,11 +87,12 @@ func (p *Processor) ProcessChat(task types.ChatTask) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	fullPrompt := ""
-	if len(task.History) > 0 {
-		fullPrompt = strings.Join(task.History, "\n") + "\n"
-	}
-	fullPrompt += "User: " + task.Prompt
+	messages := make([]types.Message, 0, len(task.Messages)+1)
+	messages = append(messages, task.Messages...)
+	messages = append(messages, types.Message{
+		Role:    "user",
+		Content: task.Prompt,
+	})
 
 	var errs []error
 	for _, id := range p.Order {
@@ -100,7 +101,7 @@ func (p *Processor) ProcessChat(task types.ChatTask) (string, error) {
 			continue
 		}
 
-		res, err := prov.Generate(ctx, ChatSystemPrompt, fullPrompt)
+		res, err := prov.GenerateChat(ctx, ChatSystemPrompt, messages)
 		if err == nil && strings.TrimSpace(res) != "" {
 			return res, nil
 		}
