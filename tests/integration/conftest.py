@@ -22,7 +22,7 @@ def nvim():
             lua_config = f.read()
         n.exec_lua(lua_config)
     else:
-        pytest.fail(f"Nie znaleziono pliku configu: {init_lua_path}")
+        pytest.fail(f"Failed to found lua config: {init_lua_path}")
 
     yield n
     n.close()
