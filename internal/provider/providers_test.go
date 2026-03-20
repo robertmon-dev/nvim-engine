@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider/p_error"
 )
 
@@ -333,5 +334,149 @@ func TestProvider_HttpError(t *testing.T) {
 	_, err := prov.Generate(context.Background(), "sys", "usr")
 	if err == nil {
 		t.Fatal("Expected an HTTP 500 error, but got nil")
+	}
+}
+
+func TestAnthropicProvider_GenerateChat(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := anthropicResponse{
+			Content: []struct {
+				Text string `json:"text"`
+			}{{Text: "chat response from claude"}},
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	prov := &AnthropicProvider{
+		APIKey: "test-key",
+		Model:  "claude-3",
+		URL:    server.URL,
+	}
+
+	messages := []types.Message{
+		{Role: "system", Content: "should be ignored in array"},
+		{Role: "user", Content: "hello"},
+	}
+
+	result, err := prov.GenerateChat(context.Background(), "top level system", messages)
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v", err)
+	}
+
+	if result != "chat response from claude" {
+		t.Errorf("Expected 'chat response from claude', got: %v", result)
+	}
+}
+
+func TestOpenAIProvider_GenerateChat(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := openaiResponse{}
+		choice := struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		}{}
+		choice.Message.Content = "chat response from openai"
+		resp.Choices = append(resp.Choices, choice)
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	prov := &OpenAIProvider{
+		APIKey: "test-openai-key",
+		Model:  "gpt-4o",
+		URL:    server.URL,
+	}
+
+	messages := []types.Message{{Role: "user", Content: "hi"}}
+
+	result, err := prov.GenerateChat(context.Background(), "system prompt", messages)
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v", err)
+	}
+
+	if result != "chat response from openai" {
+		t.Errorf("Expected 'chat response from openai', got: %v", result)
+	}
+}
+
+func TestGeminiProvider_GenerateChat(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := geminiResponse{
+			Candidates: []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			}{
+				{
+					Content: struct {
+						Parts []struct {
+							Text string `json:"text"`
+						} `json:"parts"`
+					}{
+						Parts: []struct {
+							Text string `json:"text"`
+						}{{Text: "chat response from gemini"}},
+					},
+				},
+			},
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	prov := &GeminiProvider{
+		APIKey: "test-key",
+		Model:  "gemini-1.5",
+		URL:    server.URL,
+	}
+
+	messages := []types.Message{{Role: "user", Content: "hey"}}
+
+	result, err := prov.GenerateChat(context.Background(), "sys prompt", messages)
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v", err)
+	}
+
+	if result != "chat response from gemini" {
+		t.Errorf("Expected 'chat response from gemini', got: %v", result)
+	}
+}
+
+func TestOllamaProvider_GenerateChat(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := ollamaResponse{
+			Model: "llama3",
+			Message: ollamaMessage{
+				Role:    "assistant",
+				Content: "chat response from ollama",
+			},
+		}
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	prov := &OllamaProvider{
+		Model: "llama3",
+		URL:   server.URL,
+	}
+
+	messages := []types.Message{{Role: "user", Content: "ping"}}
+
+	result, err := prov.GenerateChat(context.Background(), "sys", messages)
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v", err)
+	}
+
+	if result != "chat response from ollama" {
+		t.Errorf("Expected 'chat response from ollama', got: %v", result)
 	}
 }

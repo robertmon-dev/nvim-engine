@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"nvim-engine/internal/engine/types"
@@ -95,5 +96,79 @@ func TestProcessorAllFailed(t *testing.T) {
 	_, err := proc.Process(task)
 	if err == nil {
 		t.Fatal("Expected error (all models failed), but processor returned success!")
+	}
+}
+
+func TestProcessorChatFailoverAndMessageBuilder(t *testing.T) {
+	failingMock := &mocks.MockProvider{
+		GenerateChatFunc: func(ctx context.Context, sys string, messages []types.Message) (string, error) {
+			return "", errors.New("API OFFLINE")
+		},
+	}
+
+	successMock := &mocks.MockProvider{
+		GenerateChatFunc: func(ctx context.Context, sys string, messages []types.Message) (string, error) {
+			if len(messages) != 2 {
+				t.Errorf("Expected 2 messages in payload, got %d", len(messages))
+			}
+			if messages[1].Content != "new prompt" {
+				t.Errorf("Expected last message content to be 'new prompt', got %s", messages[1].Content)
+			}
+			return "here is your code", nil
+		},
+	}
+
+	providers := map[provider.ID]provider.Provider{
+		provider.Ollama: failingMock,
+		provider.Gemini: successMock,
+	}
+
+	proc := NewProcessor(1, 10, providers)
+	task := types.ChatTask{
+		ID:     "chat-test-1",
+		Prompt: "new prompt",
+		Messages: []types.Message{
+			{Role: "user", Content: "old context"},
+		},
+	}
+
+	result, err := proc.ProcessChat(task)
+	if err != nil {
+		t.Fatalf("Expected success via failover, got error: %v", err)
+	}
+
+	if result != "here is your code" {
+		t.Errorf("Bad result. Got: %v", result)
+	}
+}
+
+func TestProcessorChatAllFailed(t *testing.T) {
+	failingMock := &mocks.MockProvider{
+		GenerateChatFunc: func(ctx context.Context, sys string, messages []types.Message) (string, error) {
+			return "", errors.New("TOTAL OUTAGE")
+		},
+	}
+
+	providers := map[provider.ID]provider.Provider{
+		provider.Ollama:    failingMock,
+		provider.Gemini:    failingMock,
+		provider.Anthropic: failingMock,
+		provider.OpenAI:    failingMock,
+	}
+
+	proc := NewProcessor(1, 10, providers)
+	task := types.ChatTask{
+		ID:       "chat-test-2",
+		Prompt:   "hello?",
+		Messages: []types.Message{},
+	}
+
+	_, err := proc.ProcessChat(task)
+	if err == nil {
+		t.Fatal("Expected error (all models failed in chat), but processor returned success!")
+	}
+
+	if !strings.Contains(err.Error(), "chat failed for all providers") {
+		t.Errorf("Expected specific error prefix, got: %v", err)
 	}
 }
