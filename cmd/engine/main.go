@@ -19,7 +19,7 @@ func main() {
 	signal.Ignore(syscall.SIGPIPE)
 
 	log := logger.Get()
-	log.Info().Msg("Booting up the Go-Engine...")
+	log.Info().Msg("Materializing Bifröst...")
 
 	cfg := config.Get()
 	if err := cfg.Validate(); err != nil {
