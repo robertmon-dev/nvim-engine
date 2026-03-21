@@ -31,10 +31,11 @@ build:
 .PHONY: install
 install: build
 	@echo "=> Killing existing instances of $(APP_NAME)..."
-	@pkill -f $(APP_NAME) || true
+	@pkill -f "[n]vim-ai-engine" || true
 	@echo "=> Installing $(APP_NAME) to $(INSTALL_DIR)..."
 	@mkdir -p $(INSTALL_DIR)
 	@cp $(BUILD_DIR)/$(APP_NAME) $(INSTALL_DIR)/
+	@chmod +x $(INSTALL_DIR)/$(APP_NAME)
 	@echo "=> Install complete. Neovim is ready to use the engine!"
 
 # ==============================================================================
