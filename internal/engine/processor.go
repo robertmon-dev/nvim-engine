@@ -148,7 +148,7 @@ func (p *Processor) Shutdown(timeout time.Duration) {
 
 	select {
 	case <-done:
-		log.Info().Msg("All workers finished. Go-Engine gracefully shut down. See ya!")
+		log.Info().Msg("All workers finished. Bifröst is not passable. See ya!")
 	case <-time.After(timeout):
 		log.Warn().Msgf("Timeout waiting for workers (%s). Forcing shutdown to prevent zombie process!", timeout)
 	}
