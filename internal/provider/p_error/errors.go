@@ -94,6 +94,10 @@ func FromResponse(providerName string, status int, body []byte) error {
 		code = ErrInternal
 	}
 
+	if message == "" && len(bodyStr) > 0 {
+		message = bodyStr
+	}
+
 	return &ProviderError{
 		Code:     code,
 		Provider: providerName,
@@ -106,7 +110,7 @@ func FromResponse(providerName string, status int, body []byte) error {
 func extractMessage(body []byte) string {
 	var data map[string]any
 	if err := json.Unmarshal(body, &data); err != nil {
-		return string(body)
+		return ""
 	}
 
 	return findString(data, "message", "error", "text", "detail")

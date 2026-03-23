@@ -5,15 +5,17 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync/atomic"
 
 	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider/p_error"
 )
 
 type OpenAIProvider struct {
-	APIKey string
-	Model  string
-	URL    string
+	APIKeys []string
+	Model   string
+	URL     string
+	current uint64
 }
 
 type openaiMessage struct {
@@ -32,6 +34,18 @@ type openaiResponse struct {
 			Content string `json:"content"`
 		} `json:"message"`
 	} `json:"choices"`
+}
+
+func (o *OpenAIProvider) IsReady() bool {
+	return len(o.APIKeys) > 0 && o.URL != ""
+}
+
+func (p *OpenAIProvider) getNextKey() string {
+	if len(p.APIKeys) == 0 {
+		return ""
+	}
+	idx := atomic.AddUint64(&p.current, 1) - 1
+	return p.APIKeys[idx%uint64(len(p.APIKeys))]
 }
 
 func (o *OpenAIProvider) Generate(ctx context.Context, system, user string) (string, error) {
@@ -80,6 +94,7 @@ func (o *OpenAIProvider) GenerateChat(ctx context.Context, systemPrompt string, 
 }
 
 func (o *OpenAIProvider) doRequest(ctx context.Context, payload openaiPayload) (string, error) {
+	key := o.getNextKey()
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
@@ -90,7 +105,7 @@ func (o *OpenAIProvider) doRequest(ctx context.Context, payload openaiPayload) (
 		return "", err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+o.APIKey)
+	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Content-Type", "application/json")
 
 	return performRequest(ctx, OpenAI, req, func(res openaiResponse) string {
@@ -99,8 +114,4 @@ func (o *OpenAIProvider) doRequest(ctx context.Context, payload openaiPayload) (
 		}
 		return ""
 	})
-}
-
-func (o *OpenAIProvider) IsReady() bool {
-	return o.APIKey != "" && o.URL != ""
 }

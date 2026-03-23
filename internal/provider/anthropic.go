@@ -5,21 +5,35 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync/atomic"
 
 	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider/p_error"
 )
 
 type AnthropicProvider struct {
-	APIKey string
-	Model  string
-	URL    string
+	APIKeys []string
+	Model   string
+	URL     string
+	current uint64
 }
 
 type anthropicResponse struct {
 	Content []struct {
 		Text string `json:"text"`
 	} `json:"content"`
+}
+
+func (a *AnthropicProvider) IsReady() bool {
+	return len(a.APIKeys) > 0 && a.URL != ""
+}
+
+func (p *AnthropicProvider) getNextKey() string {
+	if len(p.APIKeys) == 0 {
+		return ""
+	}
+	idx := atomic.AddUint64(&p.current, 1) - 1
+	return p.APIKeys[idx%uint64(len(p.APIKeys))]
 }
 
 func (a *AnthropicProvider) Generate(ctx context.Context, system, user string) (string, error) {
@@ -68,6 +82,7 @@ func (a *AnthropicProvider) GenerateChat(ctx context.Context, systemPrompt strin
 }
 
 func (a *AnthropicProvider) doRequest(ctx context.Context, payload map[string]interface{}) (string, error) {
+	key := a.getNextKey()
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
@@ -78,7 +93,7 @@ func (a *AnthropicProvider) doRequest(ctx context.Context, payload map[string]in
 		return "", err
 	}
 
-	req.Header.Set("x-api-key", a.APIKey)
+	req.Header.Set("x-api-key", key)
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("Content-Type", "application/json")
 

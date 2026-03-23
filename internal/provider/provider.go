@@ -31,19 +31,19 @@ type Provider interface {
 func InitFromConfig(cfg *config.Config) map[ID]Provider {
 	return map[ID]Provider{
 		Gemini: &GeminiProvider{
-			APIKey: cfg.Providers.GeminiAPIKey,
-			Model:  cfg.Providers.GeminiModel,
-			URL:    cfg.Providers.GeminiURL,
+			APIKeys: cfg.Providers.GeminiAPIKeys,
+			Model:   cfg.Providers.GeminiModel,
+			URL:     cfg.Providers.GeminiURL,
 		},
 		Anthropic: &AnthropicProvider{
-			APIKey: cfg.Providers.AnthropicAPIKey,
-			Model:  cfg.Providers.AnthropicModel,
-			URL:    cfg.Providers.AnthropicURL,
+			APIKeys: cfg.Providers.AnthropicAPIKeys,
+			Model:   cfg.Providers.AnthropicModel,
+			URL:     cfg.Providers.AnthropicURL,
 		},
 		OpenAI: &OpenAIProvider{
-			APIKey: cfg.Providers.OpenAIAPIKey,
-			Model:  cfg.Providers.OpenAIModel,
-			URL:    cfg.Providers.OpenAIURL,
+			APIKeys: cfg.Providers.OpenAIAPIKeys,
+			Model:   cfg.Providers.OpenAIModel,
+			URL:     cfg.Providers.OpenAIURL,
 		},
 		Ollama: &OllamaProvider{
 			Model: cfg.Providers.OllamaModel,
