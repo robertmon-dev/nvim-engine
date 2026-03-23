@@ -1,6 +1,12 @@
 package provider
 
-import "sync/atomic"
+import (
+	"context"
+	"errors"
+	"sync/atomic"
+
+	"nvim-engine/internal/engine/types"
+)
 
 type Dispatcher struct {
 	providers []Provider
@@ -28,4 +34,25 @@ func (r *Dispatcher) getNext() Provider {
 
 	idx := atomic.AddUint64(&r.current, 1) - 1
 	return r.providers[idx%uint64(len(r.providers))]
+}
+
+func (r *Dispatcher) Generate(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
+	p := r.getNext()
+	if p == nil {
+		return "", errors.New("no active AI providers available")
+	}
+	return p.Generate(ctx, systemPrompt, userPrompt)
+}
+
+func (r *Dispatcher) GenerateChat(ctx context.Context, systemPrompt string, messages []types.Message) (string, error) {
+	p := r.getNext()
+	if p == nil {
+		return "", errors.New("no active AI providers available")
+	}
+
+	return p.GenerateChat(ctx, systemPrompt, messages)
+}
+
+func (r *Dispatcher) IsReady() bool {
+	return len(r.providers) > 0
 }

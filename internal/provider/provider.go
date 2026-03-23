@@ -28,28 +28,31 @@ type Provider interface {
 	IsReady() bool
 }
 
-func InitFromConfig(cfg *config.Config) map[ID]Provider {
-	return map[ID]Provider{
-		Gemini: &GeminiProvider{
-			APIKeys: cfg.Providers.GeminiAPIKeys,
-			Model:   cfg.Providers.GeminiModel,
-			URL:     cfg.Providers.GeminiURL,
-		},
-		Anthropic: &AnthropicProvider{
-			APIKeys: cfg.Providers.AnthropicAPIKeys,
-			Model:   cfg.Providers.AnthropicModel,
-			URL:     cfg.Providers.AnthropicURL,
-		},
-		OpenAI: &OpenAIProvider{
-			APIKeys: cfg.Providers.OpenAIAPIKeys,
-			Model:   cfg.Providers.OpenAIModel,
-			URL:     cfg.Providers.OpenAIURL,
-		},
-		Ollama: &OllamaProvider{
-			Model: cfg.Providers.OllamaModel,
-			URL:   cfg.Providers.OllamaURL,
-		},
+func InitFromConfig(cfg *config.Config) *Dispatcher {
+	gemini := &GeminiProvider{
+		APIKeys: cfg.Providers.GeminiAPIKeys,
+		Model:   cfg.Providers.GeminiModel,
+		URL:     cfg.Providers.GeminiURL,
 	}
+
+	anthropic := &AnthropicProvider{
+		APIKeys: cfg.Providers.AnthropicAPIKeys,
+		Model:   cfg.Providers.AnthropicModel,
+		URL:     cfg.Providers.AnthropicURL,
+	}
+
+	openai := &OpenAIProvider{
+		APIKeys: cfg.Providers.OpenAIAPIKeys,
+		Model:   cfg.Providers.OpenAIModel,
+		URL:     cfg.Providers.OpenAIURL,
+	}
+
+	ollama := &OllamaProvider{
+		Model: cfg.Providers.OllamaModel,
+		URL:   cfg.Providers.OllamaURL,
+	}
+
+	return NewDispatcher(gemini, anthropic, openai, ollama)
 }
 
 func sendRequest[T any](req *http.Request) (T, []byte, int, error) {

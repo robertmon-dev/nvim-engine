@@ -104,7 +104,3 @@ func (a *AnthropicProvider) doRequest(ctx context.Context, payload map[string]in
 		return ""
 	})
 }
-
-func (a *AnthropicProvider) IsReady() bool {
-	return a.APIKey != "" && a.URL != ""
-}

@@ -26,8 +26,8 @@ func main() {
 		log.Warn().Msg(err.Error())
 	}
 
-	providers := provider.InitFromConfig(cfg)
-	proc := engine.NewProcessor(cfg.Engine.Workers, cfg.Engine.Capacity, providers)
+	dispatcher := provider.InitFromConfig(cfg)
+	proc := engine.NewProcessor(cfg.Engine.Workers, cfg.Engine.Capacity, dispatcher)
 
 	dec := msgpack.NewDecoder(os.Stdin)
 
