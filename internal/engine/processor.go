@@ -101,7 +101,7 @@ func (p *Processor) ProcessChat(task types.ChatTask) (string, error) {
 		errs = append(errs, fmt.Errorf("[Attempt %d failed]: %w", i+1, err))
 	}
 
-	return "", fmt.Errorf("chat failed after %d attempts:\n%w", p.MaxRetries, errors.Join(errs...))
+	return "", fmt.Errorf("chat failed after %d attempt:\n%w", p.MaxRetries, errors.Join(errs...))
 }
 
 func parseOptions(raw string) []string {

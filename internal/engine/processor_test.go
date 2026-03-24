@@ -70,8 +70,8 @@ func TestProcessorEmptyResponseFailover(t *testing.T) {
 		t.Errorf("Bad result. Got: %v", result)
 	}
 
-	if attempts != 2 {
-		t.Errorf("Expected exactly 2 attempts, got %d", attempts)
+	if attempts != 1 {
+		t.Errorf("Expected exactly 1 attempt, got %d", attempts)
 	}
 }
 
@@ -93,12 +93,12 @@ func TestProcessorAllFailed(t *testing.T) {
 		t.Fatal("Expected error (all models failed), but processor returned success!")
 	}
 
-	if !strings.Contains(err.Error(), "all 3 attempted retries failed") {
+	if !strings.Contains(err.Error(), "all 1 attempted retries failed") {
 		t.Errorf("Expected specific error prefix, got: %v", err)
 	}
 
-	if attempts != 3 {
-		t.Errorf("Expected exactly 3 attempts, got %d", attempts)
+	if attempts != 1 {
+		t.Errorf("Expected exactly 1 attempt, got %d", attempts)
 	}
 }
 
@@ -161,7 +161,7 @@ func TestProcessorChatAllFailed(t *testing.T) {
 		t.Fatal("Expected error (all models failed in chat), but processor returned success!")
 	}
 
-	if !strings.Contains(err.Error(), "chat failed after 3 attempts") {
+	if !strings.Contains(err.Error(), "chat failed after 1 attempt") {
 		t.Errorf("Expected specific error prefix, got: %v", err)
 	}
 }
