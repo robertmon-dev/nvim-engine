@@ -79,9 +79,9 @@ func TestAnthropicProvider_Generate(t *testing.T) {
 			defer server.Close()
 
 			prov := &AnthropicProvider{
-				APIKey: "test-anthropic-key",
-				Model:  "claude-3-sonnet",
-				URL:    server.URL,
+				APIKeys: []string{"test-anthropic-key"},
+				Model:   "claude-3-sonnet",
+				URL:     server.URL,
 			}
 
 			result, err := prov.Generate(context.Background(), "sys", "user")
@@ -130,9 +130,9 @@ func TestOpenAIProvider_Generate(t *testing.T) {
 	defer server.Close()
 
 	prov := &OpenAIProvider{
-		APIKey: "test-openai-key",
-		Model:  "gpt-4o",
-		URL:    server.URL,
+		APIKeys: []string{"test-openai-key"}, // POPRAWKA: tablica
+		Model:   "gpt-4o",
+		URL:     server.URL,
 	}
 
 	result, err := prov.Generate(context.Background(), "system", "user")
@@ -204,9 +204,9 @@ func TestGeminiProvider_Generate(t *testing.T) {
 			defer server.Close()
 
 			prov := &GeminiProvider{
-				APIKey: "test-key",
-				Model:  "test-model",
-				URL:    server.URL,
+				APIKeys: []string{"test-key"},
+				Model:   "test-model",
+				URL:     server.URL,
 			}
 
 			result, err := prov.Generate(context.Background(), "sys", "user")
@@ -328,7 +328,8 @@ func TestProvider_HttpError(t *testing.T) {
 	defer server.Close()
 
 	prov := &OpenAIProvider{
-		URL: server.URL,
+		APIKeys: []string{"dummy-key-to-pass-isready"},
+		URL:     server.URL,
 	}
 
 	_, err := prov.Generate(context.Background(), "sys", "usr")
@@ -350,9 +351,9 @@ func TestAnthropicProvider_GenerateChat(t *testing.T) {
 	defer server.Close()
 
 	prov := &AnthropicProvider{
-		APIKey: "test-key",
-		Model:  "claude-3",
-		URL:    server.URL,
+		APIKeys: []string{"test-key"},
+		Model:   "claude-3",
+		URL:     server.URL,
 	}
 
 	messages := []types.Message{
@@ -387,9 +388,9 @@ func TestOpenAIProvider_GenerateChat(t *testing.T) {
 	defer server.Close()
 
 	prov := &OpenAIProvider{
-		APIKey: "test-openai-key",
-		Model:  "gpt-4o",
-		URL:    server.URL,
+		APIKeys: []string{"test-openai-key"},
+		Model:   "gpt-4o",
+		URL:     server.URL,
 	}
 
 	messages := []types.Message{{Role: "user", Content: "hi"}}
@@ -433,9 +434,9 @@ func TestGeminiProvider_GenerateChat(t *testing.T) {
 	defer server.Close()
 
 	prov := &GeminiProvider{
-		APIKey: "test-key",
-		Model:  "gemini-1.5",
-		URL:    server.URL,
+		APIKeys: []string{"test-key"},
+		Model:   "gemini-1.5",
+		URL:     server.URL,
 	}
 
 	messages := []types.Message{{Role: "user", Content: "hey"}}

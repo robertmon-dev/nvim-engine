@@ -16,7 +16,7 @@ import (
 
 type Processor struct {
 	Pool       *pond.WorkerPool
-	Dispatcher *provider.Dispatcher
+	Dispatcher provider.Provider
 	MaxRetries int
 }
 
@@ -35,7 +35,7 @@ func (p *Processor) Submit(f func()) {
 	p.Pool.Submit(f)
 }
 
-func NewProcessor(workers, capacity int, dispatcher *provider.Dispatcher) *Processor {
+func NewProcessor(workers, capacity int, dispatcher provider.Provider) *Processor {
 	return &Processor{
 		Pool:       pond.New(workers, capacity),
 		Dispatcher: dispatcher,

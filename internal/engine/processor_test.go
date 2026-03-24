@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"nvim-engine/internal/engine/types"
-	"nvim-engine/internal/provider"
 	"nvim-engine/mocks"
 )
 
@@ -46,24 +45,20 @@ func TestParseOptions(t *testing.T) {
 }
 
 func TestProcessorEmptyResponseFailover(t *testing.T) {
-	emptyMock := &mocks.MockProvider{
-		GenerateFunc: func(ctx context.Context, system, user string) (string, error) {
-			return " \n ===OPTION=== \n ", nil
-		},
-	}
+	attempts := 0
 
-	successMock := &mocks.MockProvider{
+	mockDispatcher := &mocks.MockDispatcher{
 		GenerateFunc: func(ctx context.Context, system, user string) (string, error) {
+			attempts++
+			if attempts == 1 {
+				return " \n ===OPTION=== \n ", nil
+			}
 			return "feat: valid option", nil
 		},
+		IsReadyFunc: func() bool { return true },
 	}
 
-	providers := map[provider.ID]provider.Provider{
-		provider.Gemini:    emptyMock,
-		provider.Anthropic: successMock,
-	}
-
-	proc := NewProcessor(1, 10, providers)
+	proc := NewProcessor(1, 10, mockDispatcher)
 	task := types.Task{ID: "test-3", Action: "commit", Payload: "diff"}
 
 	result, err := proc.Process(task)
@@ -74,40 +69,48 @@ func TestProcessorEmptyResponseFailover(t *testing.T) {
 	if len(result) == 0 || result[0] != "feat: valid option" {
 		t.Errorf("Bad result. Got: %v", result)
 	}
+
+	if attempts != 2 {
+		t.Errorf("Expected exactly 2 attempts, got %d", attempts)
+	}
 }
 
 func TestProcessorAllFailed(t *testing.T) {
-	failingMock := &mocks.MockProvider{
+	attempts := 0
+	failingDispatcher := &mocks.MockDispatcher{
 		GenerateFunc: func(ctx context.Context, system, user string) (string, error) {
+			attempts++
 			return "", errors.New("TOTAL OUTAGE")
 		},
+		IsReadyFunc: func() bool { return true },
 	}
 
-	providers := map[provider.ID]provider.Provider{
-		provider.Gemini:    failingMock,
-		provider.Anthropic: failingMock,
-		provider.OpenAI:    failingMock,
-		provider.Ollama:    failingMock,
-	}
-
-	proc := NewProcessor(1, 10, providers)
+	proc := NewProcessor(1, 10, failingDispatcher)
 	task := types.Task{ID: "test-2", Action: "commit", Payload: "diff..."}
 
 	_, err := proc.Process(task)
 	if err == nil {
 		t.Fatal("Expected error (all models failed), but processor returned success!")
 	}
+
+	if !strings.Contains(err.Error(), "all 3 attempted retries failed") {
+		t.Errorf("Expected specific error prefix, got: %v", err)
+	}
+
+	if attempts != 3 {
+		t.Errorf("Expected exactly 3 attempts, got %d", attempts)
+	}
 }
 
 func TestProcessorChatFailoverAndMessageBuilder(t *testing.T) {
-	failingMock := &mocks.MockProvider{
+	attempts := 0
+	mockDispatcher := &mocks.MockDispatcher{
 		GenerateChatFunc: func(ctx context.Context, sys string, messages []types.Message) (string, error) {
-			return "", errors.New("API OFFLINE")
-		},
-	}
+			attempts++
+			if attempts == 1 {
+				return "", errors.New("API OFFLINE")
+			}
 
-	successMock := &mocks.MockProvider{
-		GenerateChatFunc: func(ctx context.Context, sys string, messages []types.Message) (string, error) {
 			if len(messages) != 2 {
 				t.Errorf("Expected 2 messages in payload, got %d", len(messages))
 			}
@@ -116,14 +119,10 @@ func TestProcessorChatFailoverAndMessageBuilder(t *testing.T) {
 			}
 			return "here is your code", nil
 		},
+		IsReadyFunc: func() bool { return true },
 	}
 
-	providers := map[provider.ID]provider.Provider{
-		provider.Ollama: failingMock,
-		provider.Gemini: successMock,
-	}
-
-	proc := NewProcessor(1, 10, providers)
+	proc := NewProcessor(1, 10, mockDispatcher)
 	task := types.ChatTask{
 		ID:     "chat-test-1",
 		Prompt: "new prompt",
@@ -143,20 +142,14 @@ func TestProcessorChatFailoverAndMessageBuilder(t *testing.T) {
 }
 
 func TestProcessorChatAllFailed(t *testing.T) {
-	failingMock := &mocks.MockProvider{
+	failingDispatcher := &mocks.MockDispatcher{
 		GenerateChatFunc: func(ctx context.Context, sys string, messages []types.Message) (string, error) {
 			return "", errors.New("TOTAL OUTAGE")
 		},
+		IsReadyFunc: func() bool { return true },
 	}
 
-	providers := map[provider.ID]provider.Provider{
-		provider.Ollama:    failingMock,
-		provider.Gemini:    failingMock,
-		provider.Anthropic: failingMock,
-		provider.OpenAI:    failingMock,
-	}
-
-	proc := NewProcessor(1, 10, providers)
+	proc := NewProcessor(1, 10, failingDispatcher)
 	task := types.ChatTask{
 		ID:       "chat-test-2",
 		Prompt:   "hello?",
@@ -168,7 +161,25 @@ func TestProcessorChatAllFailed(t *testing.T) {
 		t.Fatal("Expected error (all models failed in chat), but processor returned success!")
 	}
 
-	if !strings.Contains(err.Error(), "chat failed for all providers") {
+	if !strings.Contains(err.Error(), "chat failed after 3 attempts") {
 		t.Errorf("Expected specific error prefix, got: %v", err)
+	}
+}
+
+func TestProcessorNotReadyFail(t *testing.T) {
+	emptyDispatcher := &mocks.MockDispatcher{
+		IsReadyFunc: func() bool { return false },
+	}
+
+	proc := NewProcessor(1, 10, emptyDispatcher)
+
+	_, err := proc.Process(types.Task{Payload: "test"})
+	if err == nil || !strings.Contains(err.Error(), "no API keys or local providers configured") {
+		t.Errorf("Expected fast-fail error for unready dispatcher, got: %v", err)
+	}
+
+	_, errChat := proc.ProcessChat(types.ChatTask{Prompt: "test"})
+	if errChat == nil || !strings.Contains(errChat.Error(), "no API keys or local providers configured") {
+		t.Errorf("Expected fast-fail error for unready dispatcher in chat, got: %v", errChat)
 	}
 }
