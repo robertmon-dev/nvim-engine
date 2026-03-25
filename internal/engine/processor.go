@@ -39,7 +39,7 @@ func NewProcessor(workers, capacity int, dispatcher provider.Provider) *Processo
 	return &Processor{
 		Pool:       pond.New(workers, capacity),
 		Dispatcher: dispatcher,
-		MaxRetries: 1,
+		MaxRetries: 4,
 	}
 }
 
