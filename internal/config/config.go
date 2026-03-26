@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -14,6 +13,8 @@ type EngineConfig struct {
 }
 
 type ProvidersConfig struct {
+	Order []string
+
 	GeminiAPIKeys []string
 	GeminiModel   string
 	GeminiURL     string
@@ -50,6 +51,8 @@ func Get() *Config {
 	once.Do(func() {
 		instance = &Config{
 			Providers: ProvidersConfig{
+				Order: getEnvAsSlice("PROVIDER_ORDER"),
+
 				GeminiAPIKeys: getEnvAsSlice("GEMINI_API_KEYS"),
 				GeminiModel:   getEnvOrDefault("GEMINI_MODEL", "gemini-2.0-flash"),
 				GeminiURL:     getEnvOrDefault("GEMINI_URL", "https://generativelanguage.googleapis.com/v1beta/models"),
@@ -64,6 +67,10 @@ func Get() *Config {
 
 				OllamaModel: getEnvOrDefault("OLLAMA_MODEL", "qwen3.5:cloud"),
 				OllamaURL:   getEnvOrDefault("OLLAMA_URL", "http://localhost:11434/api/chat"),
+			},
+			Engine: EngineConfig{
+				Workers:  4,
+				Capacity: 4,
 			},
 		}
 	})
@@ -102,16 +109,6 @@ func getEnvAsSlice(key string) []string {
 func getEnvOrDefault(key, fallback string) string {
 	if val, ok := os.LookupEnv(key); ok {
 		return val
-	}
-
-	return fallback
-}
-
-func getEnvAsInt(key string, fallback int) int {
-	if val, ok := os.LookupEnv(key); ok {
-		if i, err := strconv.Atoi(val); err == nil {
-			return i
-		}
 	}
 
 	return fallback
