@@ -69,8 +69,8 @@ func Get() *Config {
 				OllamaURL:   getEnvOrDefault("OLLAMA_URL", "http://localhost:11434/api/chat"),
 			},
 			Engine: EngineConfig{
-				Workers:  4,
-				Capacity: 4,
+				Workers:  10,
+				Capacity: 20,
 			},
 		}
 	})

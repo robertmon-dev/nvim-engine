@@ -23,7 +23,7 @@ func main() {
 
 	cfg := config.Get()
 	if err := cfg.Validate(); err != nil {
-		log.Warn().Msg(err.Error())
+		log.Fatal().Msg(err.Error())
 	}
 
 	dispatcher := provider.InitFromConfig(cfg)
