@@ -130,7 +130,7 @@ func TestOpenAIProvider_Generate(t *testing.T) {
 	defer server.Close()
 
 	prov := &OpenAIProvider{
-		APIKeys: []string{"test-openai-key"}, // POPRAWKA: tablica
+		APIKeys: []string{"test-openai-key"},
 		Model:   "gpt-4o",
 		URL:     server.URL,
 	}

@@ -65,8 +65,8 @@ func Get() *Config {
 				OpenAIModel:   getEnvOrDefault("OPENAI_MODEL", "gpt-4o"),
 				OpenAIURL:     getEnvOrDefault("OPENAI_URL", "https://api.openai.com/v1/chat/completions"),
 
-				OllamaModel: getEnvOrDefault("OLLAMA_MODEL", "qwen3.5"),
-				OllamaURL:   getEnvOrDefault("OLLAMA_URL", "http://localhost:11434/api/chat"),
+				OllamaModel: getEnvOrDefault("OLLAMA_MODEL", ""),
+				OllamaURL:   getEnvOrDefault("OLLAMA_URL", ""),
 			},
 			Engine: EngineConfig{
 				Workers:  10,
