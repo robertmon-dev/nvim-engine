@@ -42,3 +42,6 @@ jobs:
 
       - name: Run Integration Tests
         run: make test-integration
+        env:
+          OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEY }}
+          PROVIDER_ORDER: openai
