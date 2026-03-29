@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"nvim-engine/internal/config"
 	"nvim-engine/internal/engine/types"
@@ -29,26 +30,44 @@ type Provider interface {
 }
 
 func InitFromConfig(cfg *config.Config) *Dispatcher {
-	candidates := []Provider{
-		&GeminiProvider{
+	allProviders := map[ID]Provider{
+		Gemini: &GeminiProvider{
 			APIKeys: cfg.Providers.GeminiAPIKeys,
 			Model:   cfg.Providers.GeminiModel,
 			URL:     cfg.Providers.GeminiURL,
 		},
-		&AnthropicProvider{
+		Anthropic: &AnthropicProvider{
 			APIKeys: cfg.Providers.AnthropicAPIKeys,
 			Model:   cfg.Providers.AnthropicModel,
 			URL:     cfg.Providers.AnthropicURL,
 		},
-		&OpenAIProvider{
+		OpenAI: &OpenAIProvider{
 			APIKeys: cfg.Providers.OpenAIAPIKeys,
 			Model:   cfg.Providers.OpenAIModel,
 			URL:     cfg.Providers.OpenAIURL,
 		},
-		&OllamaProvider{
+		Ollama: &OllamaProvider{
 			Model: cfg.Providers.OllamaModel,
 			URL:   cfg.Providers.OllamaURL,
 		},
+	}
+
+	var candidates []Provider
+	added := make(map[ID]bool)
+
+	for _, pName := range cfg.Providers.Order {
+		id := ID(strings.ToLower(pName))
+		if p, exists := allProviders[id]; exists {
+			candidates = append(candidates, p)
+			added[id] = true
+		}
+	}
+
+	defaultOrder := []ID{Gemini, Anthropic, OpenAI, Ollama}
+	for _, id := range defaultOrder {
+		if !added[id] {
+			candidates = append(candidates, allProviders[id])
+		}
 	}
 
 	var activeProviders []Provider
