@@ -36,14 +36,15 @@ The binary will be installed to: `~/.config/nvim/bin/nvim-engine`.
 The engine automatically reads API keys from your environment. You can set these in your `.zshrc`, `.bashrc`, or a `.env` file:
 
 ```bash
-export GEMINI_API_KEY="<pass your keys>"
-export OPENAI_API_KEY="<pass your keys>>"
-export ANTHROPIC_API_KEY="<pass your keys>"
+export GEMINI_API_KEYS="<pass your keys>"
+export OPENAI_API_KEYS="<pass your keys>>"
+export ANTHROPIC_API_KEYS="<pass your keys>"
 
 export GEMINI_MODEL="gemini-2.0-flash"
 export OPENAI_MODEL="gpt-4o"
 export ANTHROPIC_MODEL="claude-3-5-sonnet-20241022"
 ```
+(Ollama has strange latency locally, I would rather suggest to do not use it's models)
 
 ## Project Structure
 
