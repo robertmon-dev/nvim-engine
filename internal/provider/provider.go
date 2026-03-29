@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"nvim-engine/internal/config"
 	"nvim-engine/internal/engine/types"
@@ -29,30 +30,54 @@ type Provider interface {
 }
 
 func InitFromConfig(cfg *config.Config) *Dispatcher {
-	gemini := &GeminiProvider{
-		APIKeys: cfg.Providers.GeminiAPIKeys,
-		Model:   cfg.Providers.GeminiModel,
-		URL:     cfg.Providers.GeminiURL,
+	allProviders := map[ID]Provider{
+		Gemini: &GeminiProvider{
+			APIKeys: cfg.Providers.GeminiAPIKeys,
+			Model:   cfg.Providers.GeminiModel,
+			URL:     cfg.Providers.GeminiURL,
+		},
+		Anthropic: &AnthropicProvider{
+			APIKeys: cfg.Providers.AnthropicAPIKeys,
+			Model:   cfg.Providers.AnthropicModel,
+			URL:     cfg.Providers.AnthropicURL,
+		},
+		OpenAI: &OpenAIProvider{
+			APIKeys: cfg.Providers.OpenAIAPIKeys,
+			Model:   cfg.Providers.OpenAIModel,
+			URL:     cfg.Providers.OpenAIURL,
+		},
+		Ollama: &OllamaProvider{
+			Model: cfg.Providers.OllamaModel,
+			URL:   cfg.Providers.OllamaURL,
+		},
 	}
 
-	anthropic := &AnthropicProvider{
-		APIKeys: cfg.Providers.AnthropicAPIKeys,
-		Model:   cfg.Providers.AnthropicModel,
-		URL:     cfg.Providers.AnthropicURL,
+	var candidates []Provider
+	added := make(map[ID]bool)
+
+	for _, pName := range cfg.Providers.Order {
+		id := ID(strings.ToLower(pName))
+		if p, exists := allProviders[id]; exists {
+			candidates = append(candidates, p)
+			added[id] = true
+		}
 	}
 
-	openai := &OpenAIProvider{
-		APIKeys: cfg.Providers.OpenAIAPIKeys,
-		Model:   cfg.Providers.OpenAIModel,
-		URL:     cfg.Providers.OpenAIURL,
+	defaultOrder := []ID{Gemini, Anthropic, OpenAI, Ollama}
+	for _, id := range defaultOrder {
+		if !added[id] {
+			candidates = append(candidates, allProviders[id])
+		}
 	}
 
-	ollama := &OllamaProvider{
-		Model: cfg.Providers.OllamaModel,
-		URL:   cfg.Providers.OllamaURL,
+	var activeProviders []Provider
+	for _, p := range candidates {
+		if p.IsReady() {
+			activeProviders = append(activeProviders, p)
+		}
 	}
 
-	return NewDispatcher(gemini, anthropic, openai, ollama)
+	return NewDispatcher(activeProviders...)
 }
 
 func sendRequest[T any](req *http.Request) (T, []byte, int, error) {

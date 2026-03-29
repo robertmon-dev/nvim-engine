@@ -127,7 +127,7 @@ func TestProcessorChatFailoverAndMessageBuilder(t *testing.T) {
 	}
 
 	proc := NewProcessor(1, 10, mockDispatcher)
-	proc.MaxRetries = 2 // <-- Wymuszamy 2 próby na test failovera
+	proc.MaxRetries = 2
 
 	task := types.ChatTask{
 		ID:     "chat-test-1",

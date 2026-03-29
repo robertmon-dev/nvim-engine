@@ -3,10 +3,12 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"nvim-engine/internal/config"
 	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider/p_error"
 )
@@ -130,7 +132,7 @@ func TestOpenAIProvider_Generate(t *testing.T) {
 	defer server.Close()
 
 	prov := &OpenAIProvider{
-		APIKeys: []string{"test-openai-key"}, // POPRAWKA: tablica
+		APIKeys: []string{"test-openai-key"},
 		Model:   "gpt-4o",
 		URL:     server.URL,
 	}
@@ -479,5 +481,44 @@ func TestOllamaProvider_GenerateChat(t *testing.T) {
 
 	if result != "chat response from ollama" {
 		t.Errorf("Expected 'chat response from ollama', got: %v", result)
+	}
+}
+
+func TestInitFromConfig_Order(t *testing.T) {
+	cfg := &config.Config{
+		Providers: config.ProvidersConfig{
+			Order: []string{"OLLAMA", "OpEnAi", "fake_provider"},
+
+			OllamaModel: "llama3",
+			OllamaURL:   "http://localhost:11434",
+
+			OpenAIAPIKeys: []string{"test-key"},
+			OpenAIModel:   "gpt-4o",
+			OpenAIURL:     "https://api.openai.com",
+
+			GeminiAPIKeys: []string{"test-key"},
+			GeminiModel:   "gemini-1.5",
+			GeminiURL:     "https://google.com",
+
+			AnthropicModel: "claude-3",
+			AnthropicURL:   "https://anthropic.com",
+		},
+	}
+
+	dispatcher := InitFromConfig(cfg)
+
+	activeProviders := dispatcher.Providers
+
+	if len(activeProviders) != 3 {
+		t.Fatalf("Expected exactly 3 active providers, got %d", len(activeProviders))
+	}
+
+	expectedOrder := []string{"*provider.OllamaProvider", "*provider.OpenAIProvider", "*provider.GeminiProvider"}
+
+	for i, p := range activeProviders {
+		actualType := fmt.Sprintf("%T", p)
+		if actualType != expectedOrder[i] {
+			t.Errorf("Position %d: expected %s, got %s", i, expectedOrder[i], actualType)
+		}
 	}
 }

@@ -9,7 +9,7 @@ import (
 )
 
 type Dispatcher struct {
-	providers []Provider
+	Providers []Provider
 	current   uint64
 }
 
@@ -23,17 +23,17 @@ func NewDispatcher(providers ...Provider) *Dispatcher {
 	}
 
 	return &Dispatcher{
-		providers: active,
+		Providers: active,
 	}
 }
 
 func (r *Dispatcher) getNext() Provider {
-	if len(r.providers) == 0 {
+	if len(r.Providers) == 0 {
 		return nil
 	}
 
 	idx := atomic.AddUint64(&r.current, 1) - 1
-	return r.providers[idx%uint64(len(r.providers))]
+	return r.Providers[idx%uint64(len(r.Providers))]
 }
 
 func (r *Dispatcher) Generate(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
@@ -54,5 +54,5 @@ func (r *Dispatcher) GenerateChat(ctx context.Context, systemPrompt string, mess
 }
 
 func (r *Dispatcher) IsReady() bool {
-	return len(r.providers) > 0
+	return len(r.Providers) > 0
 }
