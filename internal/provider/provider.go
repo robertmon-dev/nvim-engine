@@ -116,6 +116,8 @@ func performRequest[T any](
 	req *http.Request,
 	extractor func(T) string,
 ) (string, error) {
+	req = req.WithContext(ctx)
+
 	_, body, status, err := sendRequest[T](req)
 	if err != nil {
 		return "", err
