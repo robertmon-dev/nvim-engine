@@ -71,7 +71,7 @@ func (a *AnthropicProvider) GenerateChat(ctx context.Context, systemPrompt strin
 		})
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"model":      a.Model,
 		"max_tokens": 1024,
 		"system":     systemPrompt,
@@ -81,7 +81,7 @@ func (a *AnthropicProvider) GenerateChat(ctx context.Context, systemPrompt strin
 	return a.doRequest(ctx, payload)
 }
 
-func (a *AnthropicProvider) doRequest(ctx context.Context, payload map[string]interface{}) (string, error) {
+func (a *AnthropicProvider) doRequest(ctx context.Context, payload map[string]any) (string, error) {
 	key := a.getNextKey()
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
@@ -97,10 +97,11 @@ func (a *AnthropicProvider) doRequest(ctx context.Context, payload map[string]in
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("Content-Type", "application/json")
 
-	return performRequest(ctx, Anthropic, req, func(res anthropicResponse) string {
+	return performRequest(Anthropic, req, func(res anthropicResponse) string {
 		if len(res.Content) > 0 {
 			return res.Content[0].Text
 		}
+
 		return ""
 	})
 }

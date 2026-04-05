@@ -108,7 +108,7 @@ func (o *OpenAIProvider) doRequest(ctx context.Context, payload openaiPayload) (
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Content-Type", "application/json")
 
-	return performRequest(ctx, OpenAI, req, func(res openaiResponse) string {
+	return performRequest(OpenAI, req, func(res openaiResponse) string {
 		if len(res.Choices) > 0 {
 			return res.Choices[0].Message.Content
 		}

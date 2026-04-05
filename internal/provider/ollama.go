@@ -91,7 +91,7 @@ func (p *OllamaProvider) doRequest(ctx context.Context, reqBody ollamaRequest) (
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	return performRequest(ctx, Ollama, req, func(res ollamaResponse) string {
+	return performRequest(Ollama, req, func(res ollamaResponse) string {
 		if res.Error != "" {
 			return ""
 		}

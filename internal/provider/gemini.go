@@ -108,10 +108,11 @@ func (g *GeminiProvider) doRequest(ctx context.Context, payload geminiPayload) (
 	req, _ := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
 
-	return performRequest(ctx, Gemini, req, func(res geminiResponse) string {
+	return performRequest(Gemini, req, func(res geminiResponse) string {
 		if len(res.Candidates) > 0 && len(res.Candidates[0].Content.Parts) > 0 {
 			return res.Candidates[0].Content.Parts[0].Text
 		}
+
 		return ""
 	})
 }
