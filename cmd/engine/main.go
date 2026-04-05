@@ -11,6 +11,7 @@ import (
 	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/logger"
 	"nvim-engine/internal/provider"
+	"nvim-engine/internal/provider/p_error"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -22,11 +23,18 @@ func main() {
 	log.Info().Msg("Materializing Bifröst...")
 
 	cfg := config.Get()
-	if err := cfg.Validate(); err != nil {
-		log.Fatal().Msg(err.Error())
+	if pErr := cfg.Validate(); pErr != nil {
+		log.Fatal().Msg(pErr.Friendly())
 	}
 
-	dispatcher := provider.InitFromConfig(cfg)
+	dispatcher, err := provider.InitFromConfig(cfg)
+	if err != nil {
+		if pErr, ok := err.(*p_error.ProviderError); ok {
+			log.Fatal().Msg(pErr.Friendly())
+		}
+
+		log.Fatal().Err(err).Msg("Failed to initialize AI providers")
+	}
 	proc := engine.NewProcessor(cfg.Engine.Workers, cfg.Engine.Capacity, dispatcher)
 
 	dec := msgpack.NewDecoder(os.Stdin)

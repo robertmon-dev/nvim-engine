@@ -1,10 +1,11 @@
 package config
 
 import (
-	"errors"
 	"os"
 	"strings"
 	"sync"
+
+	"nvim-engine/internal/provider/p_error"
 )
 
 type EngineConfig struct {
@@ -78,12 +79,16 @@ func Get() *Config {
 	return instance
 }
 
-func (c *Config) Validate() error {
+func (c *Config) Validate() *p_error.ProviderError {
 	hasCloudKey := len(c.Providers.GeminiAPIKeys) > 0 || len(c.Providers.AnthropicAPIKeys) > 0 || len(c.Providers.OpenAIAPIKeys) > 0
 	hasOllama := c.Providers.OllamaModel != "" && c.Providers.OllamaURL != ""
 
 	if !hasCloudKey && !hasOllama {
-		return errors.New("no API keys found and Ollama is not configured! AI generation will fail")
+		return &p_error.ProviderError{
+			Code:     p_error.ErrConfig,
+			Provider: "Configuration",
+			Message:  p_error.FriendlyMessages[p_error.ErrConfig],
+		}
 	}
 
 	return nil

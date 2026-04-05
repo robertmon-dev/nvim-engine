@@ -505,7 +505,7 @@ func TestInitFromConfig_Order(t *testing.T) {
 		},
 	}
 
-	dispatcher := InitFromConfig(cfg)
+	dispatcher, _ := InitFromConfig(cfg)
 
 	activeProviders := dispatcher.Providers
 

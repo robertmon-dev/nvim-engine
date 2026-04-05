@@ -18,7 +18,7 @@ const (
 	ErrConfig         ErrorCode = "CONFIGURATION_ERROR"
 )
 
-var friendlyMessages = map[ErrorCode]string{
+var FriendlyMessages = map[ErrorCode]string{
 	ErrRateLimit:      "You've hit the API rate limit. Please wait a moment before trying again.",
 	ErrUnauthorized:   "Authentication failed. Please check if your API key is correct in the config.",
 	ErrInvalidRequest: "The request sent to the provider was invalid. Check your prompts or model settings.",
@@ -40,9 +40,9 @@ func (e *ProviderError) Error() string {
 }
 
 func (e *ProviderError) Friendly() string {
-	base, ok := friendlyMessages[e.Code]
+	base, ok := FriendlyMessages[e.Code]
 	if !ok {
-		base = friendlyMessages[ErrUnknown]
+		base = FriendlyMessages[ErrUnknown]
 	}
 
 	providerName := strings.ToUpper(e.Provider[:1]) + strings.ToLower(e.Provider[1:])

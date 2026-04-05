@@ -29,7 +29,7 @@ type Provider interface {
 	IsReady() bool
 }
 
-func InitFromConfig(cfg *config.Config) *Dispatcher {
+func InitFromConfig(cfg *config.Config) (*Dispatcher, error) {
 	allProviders := map[ID]Provider{
 		Gemini: &GeminiProvider{
 			APIKeys: cfg.Providers.GeminiAPIKeys,
@@ -77,7 +77,15 @@ func InitFromConfig(cfg *config.Config) *Dispatcher {
 		}
 	}
 
-	return NewDispatcher(activeProviders...)
+	if len(activeProviders) == 0 {
+		return nil, &p_error.ProviderError{
+			Code:     p_error.ErrConfig,
+			Provider: "System",
+			Message:  p_error.FriendlyMessages[p_error.ErrConfig],
+		}
+	}
+
+	return NewDispatcher(activeProviders...), nil
 }
 
 func sendRequest[T any](req *http.Request) (T, []byte, int, error) {
