@@ -97,7 +97,7 @@ func (a *AnthropicProvider) doRequest(ctx context.Context, payload map[string]an
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("Content-Type", "application/json")
 
-	return performRequest(Anthropic, req, func(res anthropicResponse) string {
+	return performRequest(ctx, Anthropic, req, func(res anthropicResponse) string {
 		if len(res.Content) > 0 {
 			return res.Content[0].Text
 		}

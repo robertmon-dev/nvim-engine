@@ -112,6 +112,7 @@ func sendRequest[T any](req *http.Request) (T, []byte, int, error) {
 }
 
 func performRequest[T any](
+	ctx context.Context,
 	providerID ID,
 	req *http.Request,
 	extractor func(T) string,
