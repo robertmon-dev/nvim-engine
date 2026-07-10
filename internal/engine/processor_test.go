@@ -34,9 +34,23 @@ func TestParseOptions(t *testing.T) {
 		},
 	}
 
+	attempts := 0
+	parsingDispatcher := &mocks.MockDispatcher{
+		GenerateFunc: func(ctx context.Context, system, user string) (string, error) {
+			attempts++
+			if attempts == 1 {
+				return " \n ===OPTION=== \n ", nil
+			}
+			return "feat: valid option", nil
+		},
+		IsReadyFunc: func() bool { return true },
+	}
+
+	proc := NewProcessor(1, 10, parsingDispatcher)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseOptions(tt.raw)
+			got := proc.parseOptions(tt.raw)
 			if !reflect.DeepEqual(got, tt.expected) {
 				t.Errorf("parseOptions() = %v, want %v", got, tt.expected)
 			}

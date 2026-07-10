@@ -39,7 +39,7 @@ func NewProcessor(workers, capacity int, dispatcher provider.Provider) *Processo
 	return &Processor{
 		Pool:       pond.New(workers, capacity),
 		Dispatcher: dispatcher,
-		MaxRetries: 4,
+		MaxRetries: 1,
 	}
 }
 
@@ -57,7 +57,7 @@ func (p *Processor) Process(task types.Task) ([]string, error) {
 		rawText, err := p.Dispatcher.Generate(ctx, SystemPrompt, task.Payload)
 
 		if err == nil {
-			options := parseOptions(rawText)
+			options := p.parseOptions(rawText)
 			if len(options) > 0 {
 				return options, nil
 			}
@@ -104,7 +104,7 @@ func (p *Processor) ProcessChat(task types.ChatTask) (string, error) {
 	return "", fmt.Errorf("chat failed after %d attempt:\n%w", p.MaxRetries, errors.Join(errs...))
 }
 
-func parseOptions(raw string) []string {
+func (p *Processor) parseOptions(raw string) []string {
 	if !strings.Contains(raw, "===OPTION===") {
 		if trimmed := strings.TrimSpace(raw); trimmed != "" {
 			return []string{trimmed}
