@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sync/atomic"
 
 	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider/p_error"
@@ -43,16 +42,8 @@ type geminiResponse struct {
 	} `json:"candidates"`
 }
 
-func (o *GeminiProvider) IsReady() bool {
-	return len(o.APIKeys) > 0 && o.URL != ""
-}
-
-func (p *GeminiProvider) getNextKey() string {
-	if len(p.APIKeys) == 0 {
-		return ""
-	}
-	idx := atomic.AddUint64(&p.current, 1) - 1
-	return p.APIKeys[idx%uint64(len(p.APIKeys))]
+func (g *GeminiProvider) IsReady() bool {
+	return len(g.APIKeys) > 0 && g.URL != ""
 }
 
 func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (string, error) {
@@ -76,6 +67,10 @@ func (g *GeminiProvider) Generate(ctx context.Context, system, user string) (str
 }
 
 func (g *GeminiProvider) GenerateChat(ctx context.Context, system string, messages []types.Message) (string, error) {
+	if !g.IsReady() {
+		return "", p_error.NewConfigError(string(Gemini))
+	}
+
 	payload := geminiPayload{
 		SystemInstruction: &geminiContent{
 			Parts: []geminiPart{{Text: system}},
@@ -98,14 +93,18 @@ func (g *GeminiProvider) GenerateChat(ctx context.Context, system string, messag
 }
 
 func (g *GeminiProvider) doRequest(ctx context.Context, payload geminiPayload) (string, error) {
-	key := g.getNextKey()
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
 	}
 
-	endpoint := fmt.Sprintf("%s/%s:generateContent?key=%s", g.URL, g.Model, key)
-	req, _ := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
+	endpoint := fmt.Sprintf("%s/%s:generateContent", g.URL, g.Model)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("x-goog-api-key", nextKey(g.APIKeys, &g.current))
 	req.Header.Set("Content-Type", "application/json")
 
 	return performRequest(ctx, Gemini, req, func(res geminiResponse) string {
