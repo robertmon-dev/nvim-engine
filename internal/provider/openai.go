@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"sync/atomic"
 
 	"nvim-engine/internal/engine/types"
 	"nvim-engine/internal/provider/p_error"
@@ -38,14 +37,6 @@ type openaiResponse struct {
 
 func (o *OpenAIProvider) IsReady() bool {
 	return len(o.APIKeys) > 0 && o.URL != ""
-}
-
-func (p *OpenAIProvider) getNextKey() string {
-	if len(p.APIKeys) == 0 {
-		return ""
-	}
-	idx := atomic.AddUint64(&p.current, 1) - 1
-	return p.APIKeys[idx%uint64(len(p.APIKeys))]
 }
 
 func (o *OpenAIProvider) Generate(ctx context.Context, system, user string) (string, error) {
@@ -94,7 +85,7 @@ func (o *OpenAIProvider) GenerateChat(ctx context.Context, systemPrompt string, 
 }
 
 func (o *OpenAIProvider) doRequest(ctx context.Context, payload openaiPayload) (string, error) {
-	key := o.getNextKey()
+	key := nextKey(o.APIKeys, &o.current)
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
