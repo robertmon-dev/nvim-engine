@@ -3,10 +3,13 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"nvim-engine/internal/config"
 	"nvim-engine/internal/engine/types"
@@ -22,6 +25,10 @@ const (
 	OpenAI    ID = "openai"
 	Ollama    ID = "ollama"
 )
+
+var httpClient = &http.Client{Timeout: 2 * time.Minute}
+
+var defaultOrder = []ID{Gemini, Anthropic, OpenAI, Ollama}
 
 type Provider interface {
 	Generate(ctx context.Context, systemPrompt, userPrompt string) (string, error)
@@ -56,28 +63,21 @@ func InitFromConfig(cfg *config.Config) (*Dispatcher, error) {
 	added := make(map[ID]bool)
 
 	for _, pName := range cfg.Providers.Order {
-		id := ID(strings.ToLower(pName))
-		if p, exists := allProviders[id]; exists {
+		id := ID(strings.ToLower(strings.TrimSpace(pName)))
+		if p, exists := allProviders[id]; exists && !added[id] {
 			candidates = append(candidates, p)
 			added[id] = true
 		}
 	}
 
-	defaultOrder := []ID{Gemini, Anthropic, OpenAI, Ollama}
 	for _, id := range defaultOrder {
 		if !added[id] {
 			candidates = append(candidates, allProviders[id])
 		}
 	}
 
-	var activeProviders []Provider
-	for _, p := range candidates {
-		if p.IsReady() {
-			activeProviders = append(activeProviders, p)
-		}
-	}
-
-	if len(activeProviders) == 0 {
+	dispatcher := NewDispatcher(candidates...)
+	if !dispatcher.IsReady() {
 		return nil, &p_error.ProviderError{
 			Code:     p_error.ErrConfig,
 			Provider: "System",
@@ -85,30 +85,7 @@ func InitFromConfig(cfg *config.Config) (*Dispatcher, error) {
 		}
 	}
 
-	return NewDispatcher(activeProviders...), nil
-}
-
-func sendRequest[T any](req *http.Request) (T, []byte, int, error) {
-	var target T
-	log := logger.Get()
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return target, nil, 0, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return target, nil, resp.StatusCode, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	log.Trace().
-		Int("status", resp.StatusCode).
-		Str("body", string(bodyBytes)).
-		Msg("Received API response")
-
-	return target, bodyBytes, resp.StatusCode, nil
+	return dispatcher, nil
 }
 
 func performRequest[T any](
@@ -117,15 +94,25 @@ func performRequest[T any](
 	req *http.Request,
 	extractor func(T) string,
 ) (string, error) {
-	req = req.WithContext(ctx)
-
-	_, body, status, err := sendRequest[T](req)
+	resp, err := httpClient.Do(req.WithContext(ctx))
 	if err != nil {
-		return "", err
+		return "", redactTransportError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read %s response body: %w", providerID, err)
 	}
 
-	if status < 200 || status >= 300 {
-		return "", p_error.FromResponse(string(providerID), status, body)
+	logger.Get().Trace().
+		Str("provider", string(providerID)).
+		Int("status", resp.StatusCode).
+		Str("body", string(body)).
+		Msg("Received API response")
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", p_error.FromResponse(string(providerID), resp.StatusCode, body)
 	}
 
 	var result T
@@ -135,8 +122,22 @@ func performRequest[T any](
 
 	content := extractor(result)
 	if content == "" {
-		return "", p_error.FromResponse(string(providerID), status, body)
+		return "", p_error.FromResponse(string(providerID), resp.StatusCode, body)
 	}
 
 	return content, nil
+}
+
+func redactTransportError(err error) error {
+	var uErr *url.Error
+	if !errors.As(err, &uErr) {
+		return err
+	}
+
+	host := "the provider"
+	if parsed, perr := url.Parse(uErr.URL); perr == nil && parsed.Host != "" {
+		host = parsed.Host
+	}
+
+	return fmt.Errorf("%s request to %s failed: %w", uErr.Op, host, uErr.Err)
 }
