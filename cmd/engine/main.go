@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,6 +17,8 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
+const shutdownTimeout = 5 * time.Second
+
 func main() {
 	signal.Ignore(syscall.SIGPIPE)
 
@@ -29,15 +32,15 @@ func main() {
 
 	dispatcher, err := provider.InitFromConfig(cfg)
 	if err != nil {
-		if pErr, ok := err.(*p_error.ProviderError); ok {
+		var pErr *p_error.ProviderError
+		if errors.As(err, &pErr) {
 			log.Fatal().Msg(pErr.Friendly())
 		}
 
 		log.Fatal().Err(err).Msg("Failed to initialize AI providers")
 	}
-	proc := engine.NewProcessor(cfg.Engine.Workers, cfg.Engine.Capacity, dispatcher)
 
-	dec := msgpack.NewDecoder(os.Stdin)
+	proc := engine.NewProcessor(cfg.Engine.Workers, cfg.Engine.Capacity, cfg.Engine.MaxRetries, dispatcher)
 
 	bridge := logger.NewNvimBridge(os.Stdout)
 	logger.AttachBridge(bridge)
@@ -49,15 +52,20 @@ func main() {
 	}
 	ctrl.RegisterHandlers()
 
-	log.Info().Msg("Bifröst is set and ready to receive MessagePack RPC")
+	log.Info().
+		Int("workers", cfg.Engine.Workers).
+		Int("capacity", cfg.Engine.Capacity).
+		Int("max_retries", cfg.Engine.MaxRetries).
+		Int("providers", len(dispatcher.Providers)).
+		Msg("Bifröst is set and ready to receive MessagePack RPC")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	go ctrl.Listen(dec, sigChan)
+	go ctrl.Listen(msgpack.NewDecoder(os.Stdin), sigChan)
 
 	sig := <-sigChan
 	log.Info().Str("signal", sig.String()).Msg("Shutdown signal received. Wrapping up...")
 
-	proc.Shutdown(5 * time.Second)
+	proc.Shutdown(shutdownTimeout)
 }

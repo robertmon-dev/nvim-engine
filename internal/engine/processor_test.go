@@ -46,7 +46,7 @@ func TestParseOptions(t *testing.T) {
 		IsReadyFunc: func() bool { return true },
 	}
 
-	proc := NewProcessor(1, 10, parsingDispatcher)
+	proc := NewProcessor(1, 10, 1, parsingDispatcher)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -72,8 +72,7 @@ func TestProcessorEmptyResponseFailover(t *testing.T) {
 		IsReadyFunc: func() bool { return true },
 	}
 
-	proc := NewProcessor(1, 10, mockDispatcher)
-	proc.MaxRetries = 2
+	proc := NewProcessor(1, 10, 2, mockDispatcher)
 
 	task := types.Task{ID: "test-3", Action: "commit", Payload: "diff"}
 
@@ -101,8 +100,7 @@ func TestProcessorAllFailed(t *testing.T) {
 		IsReadyFunc: func() bool { return true },
 	}
 
-	proc := NewProcessor(1, 10, failingDispatcher)
-	proc.MaxRetries = 3
+	proc := NewProcessor(1, 10, 3, failingDispatcher)
 
 	task := types.Task{ID: "test-2", Action: "commit", Payload: "diff..."}
 
@@ -111,7 +109,7 @@ func TestProcessorAllFailed(t *testing.T) {
 		t.Fatal("Expected error (all models failed), but processor returned success!")
 	}
 
-	if !strings.Contains(err.Error(), "all 3 attempted retries failed") {
+	if !strings.Contains(err.Error(), "commit generation failed after 3 attempt(s)") {
 		t.Errorf("Expected specific error prefix, got: %v", err)
 	}
 
@@ -140,8 +138,7 @@ func TestProcessorChatFailoverAndMessageBuilder(t *testing.T) {
 		IsReadyFunc: func() bool { return true },
 	}
 
-	proc := NewProcessor(1, 10, mockDispatcher)
-	proc.MaxRetries = 2
+	proc := NewProcessor(1, 10, 2, mockDispatcher)
 
 	task := types.ChatTask{
 		ID:     "chat-test-1",
@@ -169,8 +166,7 @@ func TestProcessorChatAllFailed(t *testing.T) {
 		IsReadyFunc: func() bool { return true },
 	}
 
-	proc := NewProcessor(1, 10, failingDispatcher)
-	proc.MaxRetries = 2
+	proc := NewProcessor(1, 10, 2, failingDispatcher)
 
 	task := types.ChatTask{
 		ID:       "chat-test-2",
@@ -183,7 +179,7 @@ func TestProcessorChatAllFailed(t *testing.T) {
 		t.Fatal("Expected error (all models failed in chat), but processor returned success!")
 	}
 
-	if !strings.Contains(err.Error(), "chat failed after 2 attempt") {
+	if !strings.Contains(err.Error(), "chat failed after 2 attempt(s)") {
 		t.Errorf("Expected specific error prefix, got: %v", err)
 	}
 }
@@ -193,7 +189,7 @@ func TestProcessorNotReadyFail(t *testing.T) {
 		IsReadyFunc: func() bool { return false },
 	}
 
-	proc := NewProcessor(1, 10, emptyDispatcher)
+	proc := NewProcessor(1, 10, 1, emptyDispatcher)
 
 	_, err := proc.Process(types.Task{Payload: "test"})
 	if err == nil || !strings.Contains(err.Error(), "no API keys or local providers configured") {

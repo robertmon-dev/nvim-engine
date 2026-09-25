@@ -14,6 +14,10 @@ import (
 	"github.com/alitto/pond"
 )
 
+const requestTimeout = 60 * time.Second
+
+const optionSeparator = "===OPTION==="
+
 type Processor struct {
 	Pool       *pond.WorkerPool
 	Dispatcher provider.Provider
@@ -35,49 +39,67 @@ func (p *Processor) Submit(f func()) {
 	p.Pool.Submit(f)
 }
 
-func NewProcessor(workers, capacity int, dispatcher provider.Provider) *Processor {
+func NewProcessor(workers, capacity, maxRetries int, dispatcher provider.Provider) *Processor {
 	return &Processor{
 		Pool:       pond.New(workers, capacity),
 		Dispatcher: dispatcher,
-		MaxRetries: 1,
+		MaxRetries: max(1, maxRetries),
 	}
+}
+
+func retry[T any](p *Processor, what string, call func(context.Context) (T, error), valid func(T) error) (T, error) {
+	var zero T
+
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	if !p.Dispatcher.IsReady() {
+		return zero, errors.New("no API keys or local providers configured in dispatcher")
+	}
+
+	attempts := max(1, p.MaxRetries)
+	errs := make([]error, 0, attempts)
+
+	for i := 0; i < attempts; i++ {
+		res, err := call(ctx)
+		if err == nil {
+			if err = valid(res); err == nil {
+				return res, nil
+			}
+		}
+
+		errs = append(errs, fmt.Errorf("[attempt %d/%d]: %w", i+1, attempts, err))
+
+		if ctx.Err() != nil {
+			break
+		}
+	}
+
+	return zero, fmt.Errorf("%s failed after %d attempt(s):\n%w", what, len(errs), errors.Join(errs...))
 }
 
 func (p *Processor) Process(task types.Task) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	if !p.Dispatcher.IsReady() {
-		return nil, errors.New("no API keys or local providers configured in dispatcher")
-	}
-
-	var errs []error
-
-	for i := 0; i < p.MaxRetries; i++ {
-		rawText, err := p.Dispatcher.Generate(ctx, SystemPrompt, task.Payload)
-
-		if err == nil {
-			options := p.parseOptions(rawText)
-			if len(options) > 0 {
-				return options, nil
+	return retry(
+		p, "commit generation",
+		func(ctx context.Context) ([]string, error) {
+			raw, err := p.Dispatcher.Generate(ctx, SystemPrompt, task.Payload)
+			if err != nil {
+				return nil, err
 			}
-			err = fmt.Errorf("returned empty response or invalid options")
-		}
 
-		errs = append(errs, fmt.Errorf("[Attempt %d failed]: %w", i+1, err))
-	}
+			return p.parseOptions(raw), nil
+		},
+		func(options []string) error {
+			if len(options) == 0 {
+				return errors.New("returned empty response or invalid options")
+			}
 
-	return nil, fmt.Errorf("all %d attempted retries failed:\n%w", p.MaxRetries, errors.Join(errs...))
+			return nil
+		},
+	)
 }
 
 func (p *Processor) ProcessChat(task types.ChatTask) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	if !p.Dispatcher.IsReady() {
-		return "", errors.New("no API keys or local providers configured in dispatcher")
-	}
-
 	messages := make([]types.Message, 0, len(task.Messages)+1)
 	messages = append(messages, task.Messages...)
 	messages = append(messages, types.Message{
@@ -85,44 +107,35 @@ func (p *Processor) ProcessChat(task types.ChatTask) (string, error) {
 		Content: task.Prompt,
 	})
 
-	var errs []error
+	return retry(
+		p, "chat",
+		func(ctx context.Context) (string, error) {
+			return p.Dispatcher.GenerateChat(ctx, ChatSystemPrompt, messages)
+		},
+		func(res string) error {
+			if strings.TrimSpace(res) == "" {
+				return errors.New("returned empty response")
+			}
 
-	for i := 0; i < p.MaxRetries; i++ {
-		res, err := p.Dispatcher.GenerateChat(ctx, ChatSystemPrompt, messages)
-
-		if err == nil && strings.TrimSpace(res) != "" {
-			return res, nil
-		}
-
-		if err == nil {
-			err = errors.New("returned empty response")
-		}
-
-		errs = append(errs, fmt.Errorf("[Attempt %d failed]: %w", i+1, err))
-	}
-
-	return "", fmt.Errorf("chat failed after %d attempt:\n%w", p.MaxRetries, errors.Join(errs...))
+			return nil
+		},
+	)
 }
 
 func (p *Processor) parseOptions(raw string) []string {
-	if !strings.Contains(raw, "===OPTION===") {
+	if !strings.Contains(raw, optionSeparator) {
 		if trimmed := strings.TrimSpace(raw); trimmed != "" {
 			return []string{trimmed}
 		}
+
 		return nil
 	}
 
-	parts := strings.Split(raw, "===OPTION===")
-	options := make([]string, 0, len(parts))
-
-	for _, p := range parts {
-		if trimmed := strings.TrimSpace(p); trimmed != "" {
+	var options []string
+	for _, part := range strings.Split(raw, optionSeparator) {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
 			options = append(options, trimmed)
 		}
-	}
-
-	if len(options) == 0 {
-		return nil
 	}
 
 	return options
