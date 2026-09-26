@@ -2,10 +2,12 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"nvim-engine/internal/engine/types"
+	"nvim-engine/internal/provider/p_error"
 	"nvim-engine/mocks"
 
 	"github.com/vmihailenco/msgpack/v5"
@@ -29,8 +31,13 @@ func TestController_Dispatch_SubmitTask_Mocked(t *testing.T) {
 		},
 		{
 			name:        "All providers failed telemetry",
-			mockErr:     errors.New("some context: all attempted providers failed: openai failed"),
+			mockErr:     fmt.Errorf("commit generation failed: %w", p_error.ErrAllProvidersFailed),
 			expectedLog: "All AI providers failed. Check :messages for details.",
+		},
+		{
+			name:        "Provider error is reported in friendly form",
+			mockErr:     &p_error.ProviderError{Code: p_error.ErrRateLimit, Provider: "openai"},
+			expectedLog: "Openai: You've hit the API rate limit.",
 		},
 	}
 

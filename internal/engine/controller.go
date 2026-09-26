@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"strings"
 	"syscall"
 	"time"
 
@@ -13,9 +12,10 @@ import (
 	"nvim-engine/internal/logger"
 	"nvim-engine/internal/provider/p_error"
 
-	"github.com/rs/zerolog/log"
 	"github.com/vmihailenco/msgpack/v5"
 )
+
+const maxDecodeErrors = 10
 
 type Controller struct {
 	Proc     ProcessorInterface
@@ -29,7 +29,10 @@ func BindHandler[T types.Identifiable](
 	logic func(T) ([]string, error),
 ) types.TaskHandler {
 	return func(msg types.RPCNotification) {
+		log := logger.Get()
+
 		if len(msg.Args) == 0 {
+			c.NotifyTele("Received a task with no payload", LogLevelError)
 			return
 		}
 
@@ -40,6 +43,14 @@ func BindHandler[T types.Identifiable](
 		}
 
 		c.Proc.Submit(func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Str("task_id", task.GetID()).
+						Msg("CRITICAL: recovered from panic while processing a task")
+					c.NotifyTele("Engine panic while processing the task. See the log.", LogLevelError)
+				}
+			}()
+
 			start := time.Now()
 			id := task.GetID()
 
@@ -68,13 +79,12 @@ func BindHandler[T types.Identifiable](
 
 func (c *Controller) handleErrorTelemetry(err error) {
 	var pErr *p_error.ProviderError
-
 	if errors.As(err, &pErr) {
 		c.NotifyTele(pErr.Friendly(), LogLevelError)
 		return
 	}
 
-	if strings.Contains(err.Error(), "all attempted providers failed") {
+	if errors.Is(err, p_error.ErrAllProvidersFailed) {
 		c.NotifyTele("All AI providers failed. Check :messages for details.", LogLevelError)
 		return
 	}
@@ -85,7 +95,6 @@ func (c *Controller) handleErrorTelemetry(err error) {
 func (c *Controller) RegisterHandlers() {
 	stack := []middleware.Middleware{
 		middleware.WithRecovery,
-		middleware.WithLogging,
 		middleware.WithMeasure,
 	}
 
@@ -106,27 +115,49 @@ func (c *Controller) RegisterHandlers() {
 func (c *Controller) Listen(dec *msgpack.Decoder, sigChan chan<- os.Signal) {
 	log := logger.Get()
 
+	shutdown := func(reason string) {
+		log.Info().Str("reason", reason).Msg("Initiating shutdown...")
+		// Buffered, but never block the listener if nobody is reading.
+		select {
+		case sigChan <- syscall.SIGTERM:
+		default:
+		}
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().Interface("panic", r).Msg("CRITICAL: Recovered from panic in main listener loop!")
-			sigChan <- syscall.SIGTERM
+			shutdown("panic in listener")
 		}
 	}()
 
+	decodeErrors := 0
 	for {
 		var msg types.RPCNotification
+
 		err := dec.Decode(&msg)
+		switch {
+		case errors.Is(err, io.EOF):
+			shutdown("Neovim closed STDIN (EOF)")
+			return
+		case errors.Is(err, io.ErrUnexpectedEOF), errors.Is(err, os.ErrClosed):
+			shutdown("STDIN closed mid-message")
+			return
+		case err != nil:
+			decodeErrors++
+			log.Error().Err(err).Int("consecutive", decodeErrors).
+				Msg("Failed to decode MessagePack payload; the stream may be desynchronised")
 
-		if err == io.EOF {
-			log.Info().Msg("Neovim closed STDIN (EOF). Initiating shutdown...")
-			sigChan <- syscall.SIGTERM
-			break
-		}
+			if decodeErrors >= maxDecodeErrors {
+				c.NotifyTele("Engine lost sync with Neovim and is shutting down. Please restart it.", LogLevelError)
+				shutdown("too many consecutive decode errors")
+				return
+			}
 
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to decode MessagePack payload")
 			continue
 		}
+
+		decodeErrors = 0
 
 		if msg.Method == "" {
 			continue
@@ -144,15 +175,17 @@ func (c *Controller) Dispatch(msg types.RPCNotification) {
 
 	method := RPCMethod(msg.Method)
 
-	if handler, ok := c.Handlers[method]; ok {
-		handler(msg)
-	} else {
-		log.Debug().Str("method", msg.Method).Msg("Unknown RPC method")
+	handler, ok := c.Handlers[method]
+	if !ok {
+		logger.Get().Debug().Str("method", msg.Method).Msg("Unknown RPC method")
+		return
 	}
+
+	handler(msg)
 }
 
 func (c *Controller) NotifyTele(msg string, level LogLevel) {
 	if err := c.Bridge.Notify(string(CallbackNvimLog), msg, string(level), EngineName); err != nil {
-		log.Error().Err(err).Msg("failed to send log to nvim")
+		logger.Get().Error().Err(err).Msg("failed to send log to nvim")
 	}
 }
