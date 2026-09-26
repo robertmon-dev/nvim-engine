@@ -4,8 +4,7 @@ import (
 	"time"
 
 	"nvim-engine/internal/engine/types"
-
-	"github.com/rs/zerolog/log"
+	"nvim-engine/internal/logger"
 )
 
 func WithMeasure(next types.TaskHandler) types.TaskHandler {
@@ -14,11 +13,9 @@ func WithMeasure(next types.TaskHandler) types.TaskHandler {
 
 		next(msg)
 
-		duration := time.Since(start)
-
-		log.Info().
+		logger.Get().Debug().
 			Str("method", msg.Method).
-			Dur("duration_ms", duration).
-			Msg("RPC task processed")
+			Dur("enqueue_duration", time.Since(start)).
+			Msg("RPC notification accepted")
 	}
 }
