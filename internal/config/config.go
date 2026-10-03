@@ -55,15 +55,15 @@ func Get() *Config {
 				Order: getEnvAsSlice("PROVIDER_ORDER"),
 
 				GeminiAPIKeys: getEnvAsSlice("GEMINI_API_KEYS"),
-				GeminiModel:   getEnvOrDefault("GEMINI_MODEL", "gemini-2.0-flash"),
+				GeminiModel:   getEnvOrDefault("GEMINI_MODEL", "gemini-3.8-flash"),
 				GeminiURL:     getEnvOrDefault("GEMINI_URL", "https://generativelanguage.googleapis.com/v1beta/models"),
 
 				AnthropicAPIKeys: getEnvAsSlice("ANTHROPIC_API_KEYS"),
-				AnthropicModel:   getEnvOrDefault("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"),
+				AnthropicModel:   getEnvOrDefault("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
 				AnthropicURL:     getEnvOrDefault("ANTHROPIC_URL", "https://api.anthropic.com/v1/messages"),
 
 				OpenAIAPIKeys: getEnvAsSlice("OPENAI_API_KEYS"),
-				OpenAIModel:   getEnvOrDefault("OPENAI_MODEL", "gpt-4o"),
+				OpenAIModel:   getEnvOrDefault("OPENAI_MODEL", "gpt-6-astra"),
 				OpenAIURL:     getEnvOrDefault("OPENAI_URL", "https://api.openai.com/v1/chat/completions"),
 
 				OllamaModel: getEnvOrDefault("OLLAMA_MODEL", ""),
