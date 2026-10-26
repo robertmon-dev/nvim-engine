@@ -117,7 +117,6 @@ func (c *Controller) Listen(dec *msgpack.Decoder, sigChan chan<- os.Signal) {
 
 	shutdown := func(reason string) {
 		log.Info().Str("reason", reason).Msg("Initiating shutdown...")
-		// Buffered, but never block the listener if nobody is reading.
 		select {
 		case sigChan <- syscall.SIGTERM:
 		default:
